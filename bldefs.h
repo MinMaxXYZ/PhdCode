@@ -1,0 +1,261 @@
+#ifndef __bldefs_INCLUDED
+#define __bldefs_INCLUDED
+
+#define X_CORRECTION	1.0
+#define Y_CORRECTION	1.0
+#define Z_CORRECTION	1.0
+
+#define GLOBAL_SCALING_FACTOR	10
+#define INTENSITY_THRESHOLD		11	
+#define DISTANCE_THRESHOLD		350.0 //(millimetres)
+
+const float d_theta = (const float)0.79;
+
+enum DSOURCE
+{
+	NONE = 1,
+	HARDWARE = 2,
+	BLS_ASCII = 3,
+	BLS_V_10_150997 = 4,
+	BLS_V009_300998 = 5
+};
+
+typedef int FLAG_TYPE;
+
+#define	ACCEPTED	0
+#define	REJECTED	1
+#define	TORSO		2	
+#define	L_ARM		3
+#define	R_ARM		4
+#define	L_LEG		5
+#define	R_LEG		6
+#define	HEAD		7
+
+#define F_VOID		0
+#define F_VALID		1
+
+
+// colour mapping modes
+
+#define	SMOOTH				0
+#define	INTENSITIES			1
+#define	MEAN_CURVATURE		2		
+#define	GAUSSIAN_CURVATURE	3
+#define	CURVEDNESS			4
+#define	SHAPE_INDEX			5
+
+#define IMG_X_OFFSET	335
+
+#define MAX_N_CAMERAS	8
+#define MAX_N_SLICES	400
+#define MAX_N_LEDS		71//32
+#define MAX_N_COLS		181
+#define MAX_T_COLS		181
+#define MAX_L_COLS		91
+#define MAX_A_COLS		46
+
+
+#define N_LANDMARKS		21
+
+#define TOP_OF_HEAD							0
+#define CENTRE_BACK_BUST					1
+#define	LEFT_SHOULDER_POINT					2
+#define RIGHT_SHOULDER_POINT				3
+#define CENTRE_FRONT_BUST					4
+#define RIGHT_SIDE_WAIST					5
+#define LEFT_SIDE_WAIST						6
+#define CENTRE_BACK_WAIST					7
+#define CENTRE_FRONT_WAIST					8
+#define LEFT_HIP_POINT						9
+#define RIGHT_HIP_POINT						10
+#define GREATEST_POSTERIOR_PROMINENCE		11
+#define CROTCH_POINT						12
+#define RIGHT_OUTER_ANKLE					13
+#define LEFT_OUTER_ANKLE					14
+#define FRONT_KNEE_PROJECTION				15
+#define BACK_KNEE_PROJECTION				16
+#define GREATEST_ABDOMINAL_PROMINENCE		17
+#define RIGHT_INNER_KNEE					18
+#define LEFT_INNER_KNEE						19
+#define ORIGIN								20
+
+
+#define N_TETRAHEDRA						12
+
+const int landmark_index[N_TETRAHEDRA*4] =	
+	{	FRONT_KNEE_PROJECTION,			BACK_KNEE_PROJECTION,			LEFT_OUTER_ANKLE,				LEFT_HIP_POINT,	
+		FRONT_KNEE_PROJECTION,			BACK_KNEE_PROJECTION,			RIGHT_OUTER_ANKLE,				RIGHT_HIP_POINT,
+
+		LEFT_HIP_POINT,					RIGHT_HIP_POINT,				FRONT_KNEE_PROJECTION,			GREATEST_ABDOMINAL_PROMINENCE,
+		LEFT_HIP_POINT,					RIGHT_HIP_POINT,				BACK_KNEE_PROJECTION,			GREATEST_POSTERIOR_PROMINENCE,
+
+		GREATEST_ABDOMINAL_PROMINENCE,	GREATEST_POSTERIOR_PROMINENCE,	LEFT_HIP_POINT,					LEFT_SIDE_WAIST,
+		GREATEST_ABDOMINAL_PROMINENCE,	GREATEST_POSTERIOR_PROMINENCE,	RIGHT_HIP_POINT,				RIGHT_SIDE_WAIST,
+
+		LEFT_SIDE_WAIST,				RIGHT_SIDE_WAIST,				GREATEST_ABDOMINAL_PROMINENCE,	CENTRE_FRONT_BUST,
+		LEFT_SIDE_WAIST,				RIGHT_SIDE_WAIST,				GREATEST_POSTERIOR_PROMINENCE,	CENTRE_BACK_BUST,
+
+		CENTRE_FRONT_BUST,				CENTRE_BACK_BUST,				RIGHT_SIDE_WAIST,				RIGHT_SHOULDER_POINT,
+		CENTRE_FRONT_BUST,				CENTRE_BACK_BUST,				LEFT_SIDE_WAIST,				LEFT_SHOULDER_POINT,
+
+		CENTRE_FRONT_BUST,				CENTRE_BACK_BUST,				TOP_OF_HEAD,					RIGHT_SHOULDER_POINT,
+		CENTRE_FRONT_BUST,				CENTRE_BACK_BUST,				TOP_OF_HEAD,					LEFT_SHOULDER_POINT,
+	};
+
+const int planelimit_index[N_TETRAHEDRA] = {2,2,	2,2,2,2,	2,2,2,2,	2,2};
+
+const int subvolume_index[] =
+	{	0,	1,	-1,
+		0,	2,	-1,
+
+		3,	4,	-1,
+		5,	6,	-1,
+		7,	8,	-1,
+		9,	10,	-1,
+
+		11,	12,	-1,
+		13,	14,	-1,
+		15,	17,	-1,
+		16,	18,	-1,
+
+		17,	19,	-1,
+		18,	19,	-1	
+	};
+
+#define N_PLANES							20
+
+const int plane_index[N_PLANES*3] =
+	{		ORIGIN,							FRONT_KNEE_PROJECTION,					BACK_KNEE_PROJECTION,
+			
+			FRONT_KNEE_PROJECTION,			BACK_KNEE_PROJECTION,					LEFT_HIP_POINT,
+			FRONT_KNEE_PROJECTION,			BACK_KNEE_PROJECTION,					RIGHT_HIP_POINT,
+
+			FRONT_KNEE_PROJECTION,			LEFT_HIP_POINT,							RIGHT_HIP_POINT,
+			GREATEST_ABDOMINAL_PROMINENCE,	LEFT_HIP_POINT,							RIGHT_HIP_POINT,
+
+			BACK_KNEE_PROJECTION,			LEFT_HIP_POINT,							RIGHT_HIP_POINT,
+			GREATEST_POSTERIOR_PROMINENCE,	LEFT_HIP_POINT,							RIGHT_HIP_POINT,
+
+			GREATEST_POSTERIOR_PROMINENCE,	GREATEST_ABDOMINAL_PROMINENCE,			LEFT_HIP_POINT,
+			GREATEST_POSTERIOR_PROMINENCE,	GREATEST_ABDOMINAL_PROMINENCE,			LEFT_SIDE_WAIST,
+
+			GREATEST_POSTERIOR_PROMINENCE,	GREATEST_ABDOMINAL_PROMINENCE,			RIGHT_HIP_POINT,
+			GREATEST_POSTERIOR_PROMINENCE,	GREATEST_ABDOMINAL_PROMINENCE,			RIGHT_SIDE_WAIST,
+
+			LEFT_SIDE_WAIST,				RIGHT_SIDE_WAIST,						GREATEST_ABDOMINAL_PROMINENCE,			
+			LEFT_SIDE_WAIST,				RIGHT_SIDE_WAIST,						CENTRE_FRONT_BUST,
+
+			LEFT_SIDE_WAIST,				RIGHT_SIDE_WAIST,						GREATEST_POSTERIOR_PROMINENCE,
+			LEFT_SIDE_WAIST,				RIGHT_SIDE_WAIST,						CENTRE_BACK_BUST,
+
+			CENTRE_FRONT_BUST,				CENTRE_BACK_BUST,						RIGHT_SIDE_WAIST,
+			CENTRE_FRONT_BUST,				CENTRE_BACK_BUST,						LEFT_SIDE_WAIST,
+
+			CENTRE_FRONT_BUST,				CENTRE_BACK_BUST,						RIGHT_SHOULDER_POINT,
+			CENTRE_FRONT_BUST,				CENTRE_BACK_BUST,						LEFT_SHOULDER_POINT,
+
+			CENTRE_FRONT_BUST,				CENTRE_BACK_BUST,						TOP_OF_HEAD
+	};
+
+
+
+#define SOURCE		0
+#define TARGET		1
+#define WARPED		2
+#define SOURCE_L	3
+#define TARGET_L	4
+
+const int PATCH_MESH_SIZE = 15;
+
+/*
+static int camera_start[MAX_N_CAMERAS] = { 0, 32, 64,  96, 128, 160, 192, 224};
+static int camera_end[MAX_N_CAMERAS]   = {31, 63, 95, 127, 159, 191, 223, 255};
+// I should have put [N_CAMERAS] up there, but it's not a constant. I should really work out these
+// values on the fly, instead of hardwiring them.
+*/
+
+// display components
+
+#define POINT_CLOUD		0
+#define COORD_ORIGIN	1
+#define REF_FRAME		2
+#define CONNECTED_0		3
+#define CONNECTED_1		4
+#define CONNECTED_2		5
+#define CONNECTED_3		6
+#define CONNECTED_4		7
+#define CONNECTED_5		8
+#define CONNECTED_6		9
+#define CONNECTED_7		10
+#define CONNECTED_ALL	11
+#define CONNECTED_NONE	12
+#define OUTLIER_CLOUD	13
+#define TEXTURE_EDGELS	14
+#define PHOTOREALISTIC	15
+#define CURV_DIR		16
+#define CURV_DIR_RED	17
+#define CURV_DIR_BLUE	18
+#define CURV_DIR_ALL	19
+#define CURV_DIR_NONE	20
+#define RIDGES			21
+#define FLEXCORDS		22
+
+
+
+
+#define R_VOID	120	
+#define G_VOID	150
+#define B_VOID	220
+
+#define SZ_DEF_STRING	256
+
+#define HORZ	0
+#define VERT	1
+
+#define PI			3.141592653589793
+#define VOID_ANGLE	-9999.0
+
+// stores info on scanner parameters
+struct PARAMS
+{
+	CString m_params_file; // file in which parameters are stored
+	int m_hdx[8];	// head x
+	int m_hdy[8];	// head "y"
+	float m_hda[8];	// head angle
+};
+
+static const LPTSTR datadir			= "d:\\documents\\phd\\data";
+static const LPTSTR camviewerpath	= "d:\\documents\\phd\\code\\camviewer\\debug\\camviewer.exe";
+
+// colormap modes
+
+#define TEXTURE		0
+#define CURVATURE	1
+
+// types of curvature
+
+#define MEAN		0
+#define GAUSSIAN	1
+
+// symmetry planes
+
+#define N_SYM_SETS		6
+
+#define SYM_SX			0
+#define SYM_SY			1
+#define SYM_SZ			2
+#define SYM_DX			3
+#define SYM_DY			4
+#define SYM_DZ			5
+
+// symmetry modes
+
+#define	SYM_MODE_NONE			0	
+#define	SYM_MODE_BODY			1	
+#define	SYM_MODE_ELLIPSOID		2	
+#define	SYM_MODE_TOOTH			3	
+#define	SYM_MODE_OCTAHEDRON		4	
+#define	SYM_MODE_BUMPY			5	
+
+
+#endif // __bldefs_INCLUDED

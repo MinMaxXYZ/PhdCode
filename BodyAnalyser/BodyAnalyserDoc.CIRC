@@ -1,0 +1,2544 @@
+// BodyAnalyserDoc.cpp : implementation of the CBodyAnalyserDoc class
+//
+
+#include "stdafx.h"
+#include "BodyAnalyser.h"
+
+#include "BodyAnalyserDoc.h"
+#include "BodyAnalyserView.h"
+#include "DialogCameraImager.h"
+#include "CameraImageFrame.h"
+#include "ConfirmDialog.h"
+#include "NoCurvMapDialog.h"
+#include "CurvMapConfirmDialog.h"
+
+#include <fstream.h>
+#include <process.h>
+#include <string.h>
+
+#include <Inventor/nodes/SoCoordinate3.h>
+#include <Inventor/nodes/SoCone.h>
+#include <Inventor/nodes/SoMaterial.h>
+#include <Inventor/nodes/SoSeparator.h>
+#include <Inventor/nodes/SoPointSet.h>
+#include <Inventor/nodes/SoLineSet.h>
+//#include <Inventor/nodes/SoTriangleStripSet.h>
+#include <Inventor/nodes/SoIndexedFaceSet.h>
+#include <Inventor/nodes/SoNormal.h>
+#include <Inventor/nodes/SoBaseColor.h>
+
+#ifdef _DEBUG
+#define new DEBUG_NEW
+#undef THIS_FILE
+static char THIS_FILE[] = __FILE__;
+#endif
+
+#include <MathTools.h>
+
+// for the curvature estimation
+
+#define UNDEFINED	0
+#define BOTH1		1
+#define BOTH2		2
+#define FLAT		3
+#define TOUGH		4
+
+
+
+/////////////////////////////////////////////////////////////////////////////
+// CBodyAnalyserDoc
+
+IMPLEMENT_DYNCREATE(CBodyAnalyserDoc, CDocument)
+
+BEGIN_MESSAGE_MAP(CBodyAnalyserDoc, CDocument)
+	//{{AFX_MSG_MAP(CBodyAnalyserDoc)
+	ON_COMMAND(ID_FILE_IMPORT, OnFileImport)
+	ON_UPDATE_COMMAND_UI(ID_FILE_IMPORT, OnUpdateFileImport)
+	ON_UPDATE_COMMAND_UI(IDM_VIEWPOINTS, OnUpdateViewpoints)
+	ON_COMMAND(ID_FILE_SAVE_AS, OnFileSaveAs)
+	ON_COMMAND(ID_FILE_RELOAD, OnFileReload)
+	ON_UPDATE_COMMAND_UI(ID_FILE_RELOAD, OnUpdateFileReload)
+	ON_COMMAND(ID_VIEW_POINTCLOUD, OnViewPointcloud)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_POINTCLOUD, OnUpdateViewPointcloud)
+	ON_COMMAND(ID_VIEW_REFERENCEFRAME, OnViewReferenceframe)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_REFERENCEFRAME, OnUpdateViewReferenceframe)
+	ON_COMMAND(ID_VIEW_COORDINATEORIGIN, OnViewCoordinateorigin)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_COORDINATEORIGIN, OnUpdateViewCoordinateorigin)
+	ON_COMMAND(ID_VIEW_CONNECTEDMESH_CAMERA0, OnViewConnectedmeshCamera0)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_CONNECTEDMESH_CAMERA0, OnUpdateViewConnectedmeshCamera0)
+	ON_COMMAND(ID_VIEW_CONNECTEDMESH_NONE, OnViewConnectedmeshNone)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_CONNECTEDMESH_NONE, OnUpdateViewConnectedmeshNone)
+	ON_COMMAND(ID_VIEW_CONNECTEDMESH_ALL, OnViewConnectedmeshAll)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_CONNECTEDMESH_ALL, OnUpdateViewConnectedmeshAll)
+	ON_COMMAND(ID_VIEW_CONNECTEDMESH_CAMERA1, OnViewConnectedmeshCamera1)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_CONNECTEDMESH_CAMERA1, OnUpdateViewConnectedmeshCamera1)
+	ON_COMMAND(ID_VIEW_CONNECTEDMESH_CAMERA2, OnViewConnectedmeshCamera2)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_CONNECTEDMESH_CAMERA2, OnUpdateViewConnectedmeshCamera2)
+	ON_COMMAND(ID_VIEW_CONNECTEDMESH_CAMERA3, OnViewConnectedmeshCamera3)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_CONNECTEDMESH_CAMERA3, OnUpdateViewConnectedmeshCamera3)
+	ON_COMMAND(ID_VIEW_CONNECTEDMESH_CAMERA4, OnViewConnectedmeshCamera4)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_CONNECTEDMESH_CAMERA4, OnUpdateViewConnectedmeshCamera4)
+	ON_COMMAND(ID_VIEW_CONNECTEDMESH_CAMERA5, OnViewConnectedmeshCamera5)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_CONNECTEDMESH_CAMERA5, OnUpdateViewConnectedmeshCamera5)
+	ON_COMMAND(ID_VIEW_CONNECTEDMESH_CAMERA6, OnViewConnectedmeshCamera6)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_CONNECTEDMESH_CAMERA6, OnUpdateViewConnectedmeshCamera6)
+	ON_COMMAND(ID_VIEW_CONNECTEDMESH_CAMERA7, OnViewConnectedmeshCamera7)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_CONNECTEDMESH_CAMERA7, OnUpdateViewConnectedmeshCamera7)
+	ON_COMMAND(ID_TOOLS_CAMERAIMAGER, OnToolsCameraImager)
+	ON_COMMAND(ID_VIEW_OUTLIERCLOUD, OnViewOutliercloud)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_OUTLIERCLOUD, OnUpdateViewOutliercloud)
+	ON_COMMAND(ID_VIEW_CONNECTEDMESH_INTENSITIES, OnUseIntensities)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_CONNECTEDMESH_INTENSITIES, OnUpdateUseIntensities)
+	ON_COMMAND(ID_TOOLS_SURFACESMOOTHING, OnToolsSurfacesmoothing)
+	ON_COMMAND(ID_TOOLS_CURVATUREMAP, OnToolsCurvaturemap)
+	ON_COMMAND(ID_VIEW_CONNECTEDMESH_CURVATURECOLOURMAP, OnViewConnectedmeshCurvaturecolourmap)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_CONNECTEDMESH_CURVATURECOLOURMAP, OnUpdateViewConnectedmeshCurvaturecolourmap)
+	//}}AFX_MSG_MAP
+END_MESSAGE_MAP()
+
+/////////////////////////////////////////////////////////////////////////////
+// CBodyAnalyserDoc construction/destruction
+
+CBodyAnalyserDoc::CBodyAnalyserDoc()
+{
+	// TODO: add one-time construction code here
+
+// BEGIN_IVWGEN
+	m_bContainsCamera = FALSE;
+	m_eOpenType = IVFDOC_OPEN_NORMAL;
+// END_IVWGEN
+
+	int s,i;
+
+	m_showPointCloud	= TRUE;
+	m_showCoordOrigin	= TRUE;
+	m_showRefFrame		= TRUE;
+
+	m_bHasData = FALSE;
+	m_data_source = NONE;
+
+	m_x_correction = X_CORRECTION;
+	m_y_correction = Y_CORRECTION;
+	m_z_correction = Z_CORRECTION;
+
+	// copy scanner params from the app
+	for (i=0; i<N_CAMERAS; i++)
+	{
+		m_scanner_params.m_hdx[i] = (theApp.Params()).m_hdx[i];
+		m_scanner_params.m_hdy[i] = (theApp.Params()).m_hdy[i];
+		m_scanner_params.m_hda[i] = (theApp.Params()).m_hda[i];
+		//m_show_head[i] = TRUE;
+	}
+	m_scanner_params.m_params_file = (theApp.Params()).m_params_file;
+
+
+	m_input_file = "";
+
+	for (s=0; s<N_SLICES; s++)
+	{
+		m_xyz_array[s] = new SbVec3f[N_CAMERAS*N_LEDS];
+		m_norm_array[s] = new SbVec3f[N_CAMERAS*N_LEDS];
+		m_b_array[s] = new unsigned char[N_CAMERAS*N_LEDS];
+		m_flag_array[s] = new unsigned char[N_CAMERAS*N_LEDS];
+		m_indices[s] = new long[N_CAMERAS*N_LEDS];
+		for (i=0; i<(N_CAMERAS*N_LEDS); i++)
+		{
+			m_b_array[s][i] = 0;
+			m_flag_array[s][i] = ACCEPTED;
+			m_indices[s][i] = SO_END_FACE_INDEX;
+		}
+	}
+
+	m_curv_map_calculated = FALSE;
+	//for (i=0; i<N_CAMERAS; i++)	{m_Current_Material[i] = new SoMaterial;}
+
+}
+
+CBodyAnalyserDoc::~CBodyAnalyserDoc()
+{
+}
+
+BOOL CBodyAnalyserDoc::OnNewDocument()
+{
+	if (!CDocument::OnNewDocument())
+		return FALSE;
+
+	// TODO: add reinitialization code here
+	// (SDI documents will reuse this document)
+
+ 
+// BEGIN_IVWGEN
+	IvfOnNewDocument();
+// END_IVWGEN
+ 
+	return TRUE;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// CBodyAnalyserDoc serialization
+
+void CBodyAnalyserDoc::Serialize(CArchive& ar)
+{
+	if (ar.IsStoring())
+	{
+// BEGIN_IVWGEN
+            IvfOnSaveDocument(ar.GetFile()->m_hFile) ;
+// END_IVWGEN
+ 
+	}
+	else
+	{
+// BEGIN_IVWGEN
+		IvfOnOpenDocument(ar.GetFile()->m_hFile) ;
+// END_IVWGEN
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// CBodyAnalyserDoc diagnostics
+
+#ifdef _DEBUG
+void CBodyAnalyserDoc::AssertValid() const
+{
+	CDocument::AssertValid();
+}
+
+void CBodyAnalyserDoc::Dump(CDumpContext& dc) const
+{
+	CDocument::Dump(dc);
+}
+#endif //_DEBUG
+
+/////////////////////////////////////////////////////////////////////////////
+// CBodyAnalyserDoc commands
+
+
+
+
+//  OnFileImport --
+//  yet another special file open scenario.  still want to route
+//  through OpenDocument to handle menus, urls, etc., but don't
+//  want to actually update the document per se.  This just gets
+//  added to the current doc.
+//
+void CBodyAnalyserDoc::OnFileImport()
+{
+m_eOpenType = IVFDOC_OPEN_IMPORT;
+theApp.OnFileOpen();
+}
+
+
+void CBodyAnalyserDoc::OnUpdateFileImport(CCmdUI *pCmdUI)
+{
+pCmdUI->Enable(m_pSceneRoot != NULL);
+}
+
+
+BOOL CBodyAnalyserDoc::OnOpenDocument(LPCTSTR lpszPathName) 
+{
+return(IvfOnOpenDocumentMessage(lpszPathName));
+}
+
+void CBodyAnalyserDoc::OnUpdateViewpoints(CCmdUI* pCmdUI) 
+{
+IvfOnUpdateViewpoints(pCmdUI);
+}
+
+
+static char spv_save_suffix[] = ".iv";
+static char spv_save_filter[] =
+   "Inventor Files (*.iv)\0*.iv\0Vrml Files (*.wrl)\0*.wrl\0BMP Files (*.bmp)\0*.bmp\0";
+
+void CBodyAnalyserDoc::OnFileSaveAs() 
+{
+CFileDialog save_dlg(FALSE);
+                        //  create the dialog
+
+	save_dlg.m_ofn.lpstrFilter = spv_save_filter ;
+	save_dlg.m_ofn.nFilterIndex = 1L;
+	save_dlg.m_ofn.lpstrCustomFilter = NULL;
+	save_dlg.m_ofn.lpstrDefExt = spv_save_suffix+1;
+	save_dlg.m_ofn.nMaxCustFilter = 0;
+        save_dlg.m_ofn.lpstrFile[0] = '\0';
+
+	save_dlg.m_ofn.Flags |= (OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT) ;
+
+
+if (save_dlg.DoModal() != IDCANCEL)
+   {
+   BOOL stat = FALSE;
+
+   // Note: Saving may change the file type, e.g. from Inventor to VRML 
+   switch (save_dlg.m_ofn.nFilterIndex)
+      {
+      case 1: 	// .iv file
+         IvfSetFileType(IVF_FILETYPE_IV);
+         stat = OnSaveDocument(save_dlg.m_ofn.lpstrFile);
+         break;
+			// Set filetype to Inventor in case it was VRML.
+
+      case 2:	// .wrl file
+         /*
+		  if (IvfGetFileType() == IVF_FILETYPE_IV)
+            IvfSetFileType(IVF_FILETYPE_VRML);
+         stat = OnSaveDocument(save_dlg.m_ofn.lpstrFile);
+		 */
+		  stat = SaveAsVRML2(save_dlg.m_ofn.lpstrFile);
+         break;
+			//  VRML requires new header - need to set the filetype.
+                        //  Don't change if file was read in as VRML or VRML2.
+
+      case 3:	// .bmp file
+         {
+         CBodyAnalyserView *t_view =
+	    (CBodyAnalyserView *)CIvfApp::IvfGetAfxView();
+         stat = t_view->SaveAsBitmap(save_dlg.m_ofn.lpstrFile);
+         }
+         break;
+			//  .bmp is totally different - let view handle.
+      }
+   }
+}
+
+BOOL CBodyAnalyserDoc::SaveAsVRML2(LPCTSTR lpszPathName)
+{
+	ofstream vrml_file;
+	vrml_file.open(lpszPathName);
+
+	int cam;
+	int start, finish;
+	int index, slice;
+	float x,y,z;
+	long int a, b, c;
+
+	vrml_file << "#VRML V2.0 utf8\n\n";
+
+	vrml_file << "Viewpoint {\n";
+    vrml_file << "orientation    0 0 1 0 \n";
+    vrml_file << "position       0 10000 50000\n";   
+    vrml_file << "}\n\n";
+
+	for(cam = 0; cam < N_CAMERAS; cam++)
+	{
+
+		start = camera_start[cam]+1;
+		finish = camera_end[cam]-1;
+
+		vrml_file << "Shape {\n";
+
+		vrml_file << "geometry IndexedFaceSet {\n";
+
+		vrml_file << "coord Coordinate {\n";
+		vrml_file << "point [\n";
+	
+		for(slice = 0; slice<N_SLICES; slice++)
+		{
+			for(index = start; index<=finish; index++)
+			{
+				if (m_indices[slice][index] != SO_END_FACE_INDEX)
+				{
+					m_xyz_array[slice][index].getValue(x,y,z);
+					vrml_file << "" << x << " " << y << " " << z << "\n";
+				}
+			}
+		}
+
+		vrml_file << "]\n";
+		vrml_file << "}\n";	// end of coord
+
+		vrml_file << "normal Normal {\n";
+		vrml_file << "vector [\n";
+	
+		for(slice = 0; slice<N_SLICES; slice++)
+		{
+			for(index = start; index<=finish; index++)
+			{
+				if (m_indices[slice][index] != SO_END_FACE_INDEX)
+				{
+					m_norm_array[slice][index].getValue(x,y,z);
+					vrml_file << "" << x << " " << y << " " << z << "\n";
+				}
+			}
+		}
+
+		vrml_file << "]\n";
+		vrml_file << "}\n";	// end of normal
+	
+		vrml_file << "color Color {\n";
+		vrml_file << "color [\n";
+
+		for(slice = 0; slice<N_SLICES; slice++)
+		{
+			for(index = start; index<=finish; index++)
+			{
+				if (m_indices[slice][index] != SO_END_FACE_INDEX)
+				{
+					x = m_b_array[slice][index] / 256.0;
+					vrml_file << "" << x << " " << x << " " << x << "\n";
+				}
+			}
+		}
+
+		vrml_file << "]\n";
+		vrml_file << "}\n";	// end of colo(u)r
+
+		vrml_file << "coordIndex [\n";
+	
+		for(index = start; index<finish; index++)
+		{
+			for(slice = 0; slice<N_SLICES-1; slice++)
+			{
+				if (m_indices[slice][index] != SO_END_FACE_INDEX)
+				{
+					//downwards
+					if(
+						(m_indices[slice][index] != SO_END_FACE_INDEX) &&
+						(m_indices[slice+1][index] != SO_END_FACE_INDEX) &&
+						(m_indices[slice+1][index+1] != SO_END_FACE_INDEX)
+						)
+					{
+						a = m_indices[slice][index];
+						b = m_indices[slice+1][index];
+						c = m_indices[slice+1][index+1];
+						vrml_file << "" << a << " " << b << " " << c << " " << SO_END_FACE_INDEX << "\n";
+					}
+
+					//to the right
+					if(
+						(m_indices[slice][index] != SO_END_FACE_INDEX) &&
+						(m_indices[slice][index+1] != SO_END_FACE_INDEX) &&
+						(m_indices[slice+1][index+1] != SO_END_FACE_INDEX)
+						)
+					{
+						a = m_indices[slice][index+1];
+						b = m_indices[slice][index];
+						c = m_indices[slice+1][index+1];
+						vrml_file << "" << a << " " << b << " " << c << " " << SO_END_FACE_INDEX << "\n";
+					}
+				}
+			}
+		}
+		
+		
+		vrml_file << "]\n";	// end of coordindex
+
+		vrml_file << "}\n"; // end of indexedfaceset
+
+		vrml_file << "}\n";	// end of shape
+	
+	}
+
+	vrml_file.close();
+	return 1;
+}
+
+
+BOOL CBodyAnalyserDoc::OnSaveDocument(LPCTSTR lpszPathName) 
+{
+BOOL stat;
+CBodyAnalyserView *pView =
+   (CBodyAnalyserView *)CIvfApp::IvfGetAfxView();
+
+//  pView->SendMessage(WM_COMMAND, ID_VIEW_VIEWINGMODE, 0);
+		//  don't need this any more ??
+
+
+stat = CDocument::OnSaveDocument(lpszPathName);
+
+return(stat);
+}
+
+void CBodyAnalyserDoc::OnFileReload() 
+{
+CIvfApp *pApp = CIvfApp::IvfGetApp();
+
+IvfDeleteContents();
+OnOpenDocument(GetPathName());
+if (pApp->IvfIsMdi()) IvfSceneGraphChanged();
+			//  an mdi app needs to treat the single
+			//  frame as an SDI to reload.
+}
+
+void CBodyAnalyserDoc::OnUpdateFileReload(CCmdUI* pCmdUI) 
+{
+pCmdUI->Enable(m_pSceneRoot != NULL);
+}
+
+
+
+void CBodyAnalyserDoc::IvfSetupUrlFetchCallback(void)
+{
+CIvfDocument::IvfSetupUrlFetchCallback();
+}
+
+short CBodyAnalyserDoc::OpenSCFile(const CString& input_file)
+{
+	ifstream ppm_file;
+	int cams, slices, indices, tones, chans;
+
+	int slice, camera, index;
+
+	float curr_x, curr_y, curr_z;
+	int curr_g;
+	SbVec3f curr_v;
+
+	ppm_file.open(input_file, ios::nocreate|ios::in);
+	if (!ppm_file.good())
+	{
+		return FALSE;
+	}
+	else
+	{
+		ppm_file >> cams;
+		ppm_file >> indices;
+		ppm_file >> slices;
+		ppm_file >> tones;
+		ppm_file >> chans;
+
+		if (1==1 /*(indices==N_LEDS) && (slices==N_SLICES) && (tones==N_GSCALES) */)
+		{
+			N_CAMERAS	= cams;
+			N_LEDS		= indices;
+			N_SLICES	= slices;
+			N_GSCALES	= tones;
+			N_CHANNELS	= chans;
+
+			for(camera = 0; camera < N_CAMERAS; camera++)
+			{
+				for(slice = 0; slice < N_SLICES; slice++)
+				{
+					for(index = 0; index < N_LEDS; index++)
+					{
+						ppm_file >> curr_x;
+						ppm_file >> curr_y;
+						ppm_file >> curr_z;
+						ppm_file >> curr_g;
+
+						if (curr_g!=(-1))
+						{
+							m_flag_array[slice][index+(camera*N_LEDS)] = ACCEPTED;
+						}
+						else
+						{
+							m_flag_array[slice][index+(camera*N_LEDS)] = REJECTED;
+						}
+
+						curr_v.setValue(curr_x,curr_y,curr_z);
+						m_xyz_array[slice][index+(camera*N_LEDS)] = curr_v;
+						m_b_array[slice][index+(camera*N_LEDS)] = curr_g;
+
+
+					}
+				}
+			}
+
+			return TRUE;
+		}
+		else
+		{
+			return FALSE;
+		}
+	}
+
+	ppm_file.close();
+
+
+}
+
+short CBodyAnalyserDoc::OpenFile(const CString& input_file)
+{
+	int head, slice, index;
+	int num_in;
+	int buf_num, rel_index;
+	short* dist_buf;
+	unsigned char* br_buf;
+
+	ifstream bls_file;
+
+	bls_file.open(input_file, ios::nocreate|ios::in);
+	if (!bls_file.good())
+		return FALSE;
+
+	const int sz_header = 16;
+	const int sz_dword = 4;
+	const int sz_float = 4;
+
+	DWORD x, y;
+	float a;
+	char header[sz_header];
+	
+	m_bHasData = TRUE;
+
+	bls_file >> binary;
+	bls_file.read(header, 16);
+
+	m_data_source = BLS_ASCII;
+	if (!strcmp(header, "BLS_V_10_150997"))
+		m_data_source = BLS_V_10_150997;
+	if (!strcmp(header, "BLS_V009_300998"))
+		m_data_source = BLS_V009_300998;
+
+	switch(m_data_source)
+	{
+		case(BLS_V009_300998):
+			// binary format: app opens file and gets data as if 
+			// downloading directly from hardware; doc then gets
+			// the data from the app
+			for (head=0; head<8; head++)
+			{
+				bls_file.read((char*)(&x), sz_dword);
+				m_scanner_params.m_hdx[head] = x;
+				bls_file.read((char*)(&y), sz_dword);
+				m_scanner_params.m_hdy[head] = y;
+				bls_file.read((char*)(&a), sz_float);
+				m_scanner_params.m_hda[head] = a;
+			}
+			m_scanner_params.m_params_file = input_file;
+			// get the rest of the data
+			theApp.OpenFromFile(bls_file);
+			GetDownload();
+			break;
+
+		case(BLS_V_10_150997):
+			// binary format: app opens file and gets data as if 
+			// downloading directly from hardware; doc then gets
+			// the data from the app
+			theApp.OpenFromFile(bls_file);
+			GetDownload();
+			break;
+
+		case(BLS_ASCII):
+			// close file and reopen it as text
+			bls_file.close();
+			bls_file.open(input_file);
+			// old ASCII format
+			// convert the string to integer (num_in)
+
+			// need also to store data in the app's raw data buffers in case
+			// we want to save it later in a different format
+
+			// distance values
+			for (slice=0; slice<N_SLICES; slice++)
+			{
+				buf_num = slice/100; // int division
+				switch(buf_num)
+				{
+				case 0:
+					dist_buf = theApp.m_dist1;
+					break;
+				case 1:
+					dist_buf = theApp.m_dist2;
+					break;
+				case 2:
+					dist_buf = theApp.m_dist3;
+					break;
+				case 3:
+					dist_buf = theApp.m_dist4;
+					break;
+				}
+
+				for (index=0; index<(N_LEDS*N_CAMERAS); index++)
+				{
+					bls_file >> num_in;
+					m_xyz_array[slice][index] = Cartesian(slice,index,num_in);
+					rel_index = (slice*(N_LEDS*N_CAMERAS)+index)%25600;
+					dist_buf[rel_index] = num_in; // store raw value
+				}
+				// if ASCII, error in input - data was stored as 4x25601 values
+				if (slice%100==99)
+					bls_file >> num_in;	
+			}			
+			// brightness values
+			for (slice=0; slice<N_SLICES; slice++)
+			{
+				buf_num = slice/100; // int division
+				switch(buf_num)
+				{
+				case 0:
+					br_buf = theApp.m_brbuf1;
+					break;
+				case 1:
+					br_buf = theApp.m_brbuf2;
+					break;
+				case 2:
+					br_buf = theApp.m_brbuf3;
+					break;
+				case 3:
+					br_buf = theApp.m_brbuf4;
+					break;
+				}
+
+				for (index=0; index<(N_LEDS*N_CAMERAS); index++)
+				{
+					bls_file >> num_in;
+					m_b_array[slice][index] = num_in;
+					rel_index = (slice*(N_LEDS*N_CAMERAS)+index)%25600;
+					br_buf[rel_index] = num_in;	// store raw value
+				}
+				// if version 0.x, error in input - data was stored as 4x25601 values
+				if (slice%100==99)
+					bls_file >> num_in;	
+			}
+			// initialise flag array
+			// at start we don't know to which part of the body points belong
+			// so designate them as WHOLE body until we know
+			for (slice=0; slice<N_SLICES; slice++)
+			{
+				for (index=0; index<(N_LEDS*N_CAMERAS); index++)
+					m_flag_array[slice][index] = ACCEPTED;	
+			}
+			break;
+	}	
+	
+	bls_file.close();
+	m_input_file = input_file;	
+	return TRUE;
+}
+
+BOOL CBodyAnalyserDoc::GetDownload(void)
+{
+	int slice, index;
+	m_bHasData = TRUE;
+	short distance, brightness;
+
+	for (slice=0; slice<N_SLICES; slice++)
+	{
+		for (index=0; index<(N_LEDS*N_CAMERAS); index++)
+		{			
+			distance = theApp.GetDistance(slice,index);
+			m_xyz_array[slice][index] = Cartesian(slice,index,distance);		
+			brightness = theApp.GetBrightness(slice,index);
+			m_b_array[slice][index] = brightness;	
+		}
+	}
+
+	// initialise flag array
+	// at start we don't know to which part of the body points belong
+	// so designate them as WHOLE body until we know
+	for (slice=0; slice<N_SLICES; slice++)
+	{
+		for (index=0; index<(N_LEDS*N_CAMERAS); index++)
+		{
+			m_flag_array[slice][index] = ACCEPTED;	
+		}
+	}
+
+	//char cwd[256];
+	//_getcwd(cwd, 256);
+	//m_input_file = cwd;
+	//m_input_file += "\\tmp.bls";
+	m_data_source = HARDWARE;
+	return TRUE;
+
+}
+
+SbVec3f& CBodyAnalyserDoc::Cartesian(int slice, int index, int distance)
+{
+	assert(slice >= 0  &&  slice < N_SLICES  &&  index >=0  && index < (N_LEDS*N_CAMERAS));
+
+	float dm, xn, yn, zn;
+	float angle, d_angle;
+    
+    // calculate the x and y values according to the distance data,
+    // using the angle obtained from the head number and LED number
+	// this is stored per document
+
+	// Note the use of Hamamatsu's original coordinate system 
+	// using y = -z
+    if (index < 32)
+	{
+		d_angle = d_theta * index;
+        angle = m_scanner_params.m_hda[0] - d_angle;
+        dm = distance / cos(((12.243 - d_angle) * M_PI) / 180);
+        xn = m_scanner_params.m_hdx[0] + dm * cos((angle * M_PI) / 180);
+        yn = m_scanner_params.m_hdy[0] + dm * sin((angle * M_PI) / 180);
+	}
+    else if (index > 31 && index < 64) 
+	{
+		d_angle = d_theta * (index - 32);
+        angle = m_scanner_params.m_hda[1] - d_theta * (index - 32);
+        dm = distance / cos(((12.243 - d_angle) * M_PI) / 180);
+        xn = m_scanner_params.m_hdx[1] + dm * cos((angle * M_PI) / 180);
+        yn = m_scanner_params.m_hdy[1] + dm * sin((angle * M_PI) / 180);
+	}
+    else if (index > 63 && index < 96) 
+	{
+		d_angle = d_theta * (index - 64);
+        angle = m_scanner_params.m_hda[2] - d_angle;
+        dm = distance / cos(((12.243 - d_angle) * M_PI) / 180);
+        xn = m_scanner_params.m_hdx[2] + dm * cos((angle * M_PI) / 180);
+        yn = m_scanner_params.m_hdy[2] + dm * sin((angle * M_PI) / 180);
+	}
+    else if (index > 95 && index < 128)
+	{
+		d_angle = d_theta * (index - 96);
+        angle = m_scanner_params.m_hda[3] - d_angle;
+        dm = distance / cos(((12.243 - d_angle) * M_PI) / 180);
+        xn = m_scanner_params.m_hdx[3] + dm * cos((angle * M_PI) / 180);
+        yn = m_scanner_params.m_hdy[3] + dm * sin((angle * M_PI) / 180);
+	}
+    else if (index > 127 && index < 160)
+	{
+		d_angle = d_theta * (index - 128);
+        angle = m_scanner_params.m_hda[4] + d_angle; //-11.9
+        dm = distance / cos(((12.243 - d_angle) * M_PI) / 180);
+        xn = m_scanner_params.m_hdx[4] - dm * cos((angle * M_PI) / 180);
+        yn = m_scanner_params.m_hdy[4] + dm * sin((angle * M_PI) / 180);
+	}
+    else if (index > 159 && index < 192) 
+	{
+		d_angle = d_theta * (index - 160);
+        angle = m_scanner_params.m_hda[5] + d_angle;
+        dm = distance / cos(((12.243 - d_angle) * M_PI) / 180);
+        xn = m_scanner_params.m_hdx[5] - dm * cos((angle * M_PI) / 180);
+        yn = m_scanner_params.m_hdy[5] + dm * sin((angle * M_PI) / 180);
+	}
+    else if (index > 191 && index < 224) 
+	{
+		d_angle = d_theta * (index - 192);
+        angle = m_scanner_params.m_hda[6] + d_angle;
+        dm = distance / cos(((12.243 - d_angle) * M_PI) / 180);
+        xn = m_scanner_params.m_hdx[6] - dm * cos((angle * M_PI) / 180);
+        yn = m_scanner_params.m_hdy[6] + dm * sin((angle * M_PI) / 180);
+	}
+    else if (index > 223 && index < 256)
+	{
+		d_angle = d_theta * (index - 224);
+        angle = m_scanner_params.m_hda[7] + d_angle;
+        dm = distance / cos(((12.243 - d_angle) * M_PI) / 180);
+        xn = m_scanner_params.m_hdx[7] - dm * cos((angle * M_PI) / 180);
+        yn = m_scanner_params.m_hdy[7] + dm * sin((angle * M_PI) / 180);
+    }
+
+    // calculate the height of the current point, assuming
+    // uniform movement of heads throughout scan
+
+	double abs_index = slice*256+index;
+	zn = 20000.0 - 20000.0 * (abs_index/102400.0);
+	
+	// correct the xyz values and output in the right-hand 
+	// coordinate system 
+	return SbVec3f(xn*m_x_correction,zn*m_y_correction,-yn*m_z_correction);
+}
+
+void CBodyAnalyserDoc::RenderBody()
+{
+	root = new SoSeparator;
+	root->ref();
+
+	// initialising drawstyles
+	m_PointCloud_DrawStyle	= new SoDrawStyle;
+	m_OutlierCloud_DrawStyle= new SoDrawStyle;
+	m_CoordOrigin_DrawStyle	= new SoDrawStyle;
+	m_RefFrame_DrawStyle	= new SoDrawStyle;
+	m_Connected_DrawStyle_0	= new SoDrawStyle;
+	m_Connected_DrawStyle_1	= new SoDrawStyle;
+	m_Connected_DrawStyle_2	= new SoDrawStyle;
+	m_Connected_DrawStyle_3	= new SoDrawStyle;
+	m_Connected_DrawStyle_4	= new SoDrawStyle;
+	m_Connected_DrawStyle_5	= new SoDrawStyle;
+	m_Connected_DrawStyle_6	= new SoDrawStyle;
+	m_Connected_DrawStyle_7	= new SoDrawStyle;
+
+	// initialising point cloud
+	SoSeparator* pointCloud = new SoSeparator;
+	pointCloud = RenderPointCloud();
+	root->addChild(pointCloud);
+
+	// initialising outlier cloud
+	SoSeparator* outlierCloud = new SoSeparator;
+	outlierCloud = RenderOutlierCloud();
+	root->addChild(outlierCloud);
+
+	// initialising reference frame
+	SoSeparator* referenceFrame = new SoSeparator;
+	referenceFrame = RenderReferenceFrame();
+	root->addChild(referenceFrame);
+
+	// initialising coordinate origin
+	SoSeparator* coordOrigin = new SoSeparator;
+	coordOrigin = RenderCoordOrigin();
+	root->addChild(coordOrigin);
+
+	// initialising connected mesh
+	for(int i = 0; i < N_CAMERAS; i++)
+	{	
+		//connectedMesh[i] = new SoSeparator;
+		//connectedMesh[i] = RenderConnectedMesh(i);
+		//root->addChild(connectedMesh[i]);
+	}
+	
+	// initialising triangulated mesh
+	CalculateNormals();
+	for(int j = 0; j < N_CAMERAS; j++)
+	{
+		triangMesh[j] = new SoSeparator;
+		triangMesh[j] = RenderTriangMesh(j);
+		root->addChild(triangMesh[j]);
+	}
+
+
+	IvfSetSceneGraph( root );
+	root -> unref();
+
+	//initialising toggles
+	OnViewConnectedmeshNone();
+	m_colormapMode = TEXTURE;
+	
+}
+
+// -----------------renderers -------------------------------------------------------------
+
+SoSeparator* CBodyAnalyserDoc::RenderPointCloud()
+{
+	SoSeparator* S = new SoSeparator;			
+
+	S->addChild(m_PointCloud_DrawStyle);
+
+	int slice, index; 
+	int i = 0;
+
+	SoCoordinate3 *vertices = new SoCoordinate3;
+		
+	for(slice = 0; slice < N_SLICES; slice++)
+	{
+		for(index = 0; index < (N_LEDS*N_CAMERAS); index++)
+		{
+			if (m_flag_array[slice][index]!=REJECTED)
+			{
+			vertices->point.set1Value(i++, m_xyz_array[slice][index]);
+			}
+		}
+	}
+
+
+	SoPointSet *cPoints = new SoPointSet;
+	S->addChild(vertices);
+
+	SoMaterial  *pointColor = new SoMaterial;
+	pointColor->diffuseColor.setValue(0.8, 0.8, 0.8); 
+	S->addChild(pointColor);
+
+	S->addChild(cPoints);
+
+	return S;
+
+}
+
+SoSeparator* CBodyAnalyserDoc::RenderOutlierCloud()
+{
+	SoSeparator* S = new SoSeparator;			
+
+	S->addChild(m_OutlierCloud_DrawStyle);
+
+	int slice, index; 
+	int i = 0;
+
+	SoCoordinate3 *vertices = new SoCoordinate3;
+		
+	for(slice = 0; slice < N_SLICES; slice++)
+	{
+		for(index = 0; index < (N_LEDS*N_CAMERAS); index++)
+		{
+			if (m_flag_array[slice][index]==REJECTED)
+			{
+			vertices->point.set1Value(i++, m_xyz_array[slice][index]);
+			}
+		}
+	}
+
+
+	SoPointSet *cPoints = new SoPointSet;
+	S->addChild(vertices);
+
+	SoMaterial  *pointColor = new SoMaterial;
+	pointColor->diffuseColor.setValue(0.8, 0.8, 0.8); 
+	S->addChild(pointColor);
+
+	S->addChild(cPoints);
+
+	return S;
+
+}
+
+
+SoSeparator* CBodyAnalyserDoc::RenderReferenceFrame()
+{
+	SoSeparator* S = new SoSeparator;			int c,i;
+
+	S->addChild(m_RefFrame_DrawStyle);
+
+	SoMaterial *refFrameColor = new SoMaterial;
+	refFrameColor->diffuseColor.setValue(0.0, 0.7, 0.0); 
+	S->addChild(refFrameColor);
+
+	float f = GLOBAL_SCALING_FACTOR;
+	float small = -500*f;
+	float large =  500*f;
+	float  step = 50*f;
+	float lim = 2000*f;
+
+
+	//-----------------------------------------------------------RIGHT SIDE
+	for(i = 0; i<=lim; i+=step)
+	{
+		SoSeparator* L = new SoSeparator;	c = 0;
+	
+		SoCoordinate3 *vertices = new SoCoordinate3;
+		vertices->point.set1Value(c++, small, i, small);
+		vertices->point.set1Value(c++, large, i, small);
+
+		SoLineSet *cLines = new SoLineSet;
+		L->addChild(vertices);
+		L->addChild(cLines);
+
+		S->addChild(L);
+	}
+
+	
+	for(i = small; i<=large; i+=step)
+	{
+		SoSeparator* L = new SoSeparator;	c = 0;
+	
+		SoCoordinate3 *vertices = new SoCoordinate3;
+		vertices->point.set1Value(c++, i, 0,   small);
+		vertices->point.set1Value(c++, i, lim, small);
+
+		SoLineSet *cLines = new SoLineSet;
+		L->addChild(vertices);
+		L->addChild(cLines);
+
+		S->addChild(L);
+	}
+
+	//-----------------------------------------------------------REAR SIDE 
+	
+	for(i = 0; i<=lim; i+=step)
+	{
+		SoSeparator* L = new SoSeparator;	c = 0;
+	
+		SoCoordinate3 *vertices = new SoCoordinate3;
+		vertices->point.set1Value(c++, large, i, small);
+		vertices->point.set1Value(c++, large, i, large);
+
+		SoLineSet *cLines = new SoLineSet;
+		L->addChild(vertices);
+		L->addChild(cLines);
+
+		S->addChild(L);
+	}
+	
+	for(i = small; i<=large; i+=step)
+	{
+		SoSeparator* L = new SoSeparator;	c = 0;
+	
+		SoCoordinate3 *vertices = new SoCoordinate3;
+		vertices->point.set1Value(c++, large, 0,   i);
+		vertices->point.set1Value(c++, large, lim, i);
+
+		SoLineSet *cLines = new SoLineSet;
+		L->addChild(vertices);
+		L->addChild(cLines);
+	
+		S->addChild(L);
+	}
+
+	//-----------------------------------------------------------FLOOR 
+	
+	for(i = small; i<=large; i+=step)
+	{
+		SoSeparator* L = new SoSeparator;	c = 0;
+	
+		SoCoordinate3 *vertices = new SoCoordinate3;
+		vertices->point.set1Value(c++, i, 0, small);
+		vertices->point.set1Value(c++, i, 0, large);
+
+		SoLineSet *cLines = new SoLineSet;
+		L->addChild(vertices);
+		L->addChild(cLines);
+
+		S->addChild(L);
+	}
+	
+	for(i = small; i<=large; i+=step)
+	{
+		SoSeparator* L = new SoSeparator;	c = 0;
+	
+		SoCoordinate3 *vertices = new SoCoordinate3;
+		vertices->point.set1Value(c++, large, 0,   i);
+		vertices->point.set1Value(c++, small, 0,   i);
+
+		SoLineSet *cLines = new SoLineSet;
+		L->addChild(vertices);
+		L->addChild(cLines);
+	
+		S->addChild(L);
+	}
+
+	return S ;
+}
+
+SoSeparator* CBodyAnalyserDoc::RenderCoordOrigin()
+{
+	SoSeparator* S = new SoSeparator;	
+	
+	S->addChild(m_CoordOrigin_DrawStyle);
+
+	SoMaterial *coordOriginColor = new SoMaterial;
+	coordOriginColor->diffuseColor.setValue(1.0, 0.0, 0.0); 
+	S->addChild(coordOriginColor);
+
+	//x axis
+	SoSeparator* aX = new SoSeparator;
+	SoCoordinate3 *Xvertices = new SoCoordinate3;
+	Xvertices->point.set1Value(0, 0, 0, 0);
+	Xvertices->point.set1Value(1, 1500, 0, 0);
+	SoLineSet *Xlines = new SoLineSet;
+	aX->addChild(Xvertices);
+	aX->addChild(Xlines);
+	S->addChild(aX);
+ 
+	//y axis
+	SoSeparator* aY = new SoSeparator;
+	SoCoordinate3 *Yvertices = new SoCoordinate3;
+	Yvertices->point.set1Value(0, 0, 0, 0);
+	Yvertices->point.set1Value(1, 0, 1000, 0);
+	SoLineSet *Ylines = new SoLineSet;
+	aY->addChild(Yvertices);
+	aY->addChild(Ylines);
+	S->addChild(aY);
+ 
+	//z axis
+	SoSeparator* aZ = new SoSeparator;
+	SoCoordinate3 *Zvertices = new SoCoordinate3;
+	Zvertices->point.set1Value(0, 0, 0, 0);
+	Zvertices->point.set1Value(1, 0, 0, 500);
+	SoLineSet *Zlines = new SoLineSet;
+	aZ->addChild(Zvertices);
+	aZ->addChild(Zlines);
+	S->addChild(aZ);
+
+	return S;
+}
+
+SoSeparator* CBodyAnalyserDoc::RenderConnectedMesh(int cam)
+{
+	SoSeparator* S = new SoSeparator;	
+
+	int start, finish;
+	int index, slice;
+
+	//replace this later
+	switch (cam)
+	{
+	case 0: S->addChild(m_Connected_DrawStyle_0); break;
+	case 1: S->addChild(m_Connected_DrawStyle_1); break;
+	case 2: S->addChild(m_Connected_DrawStyle_2); break;
+	case 3: S->addChild(m_Connected_DrawStyle_3); break;
+	case 4: S->addChild(m_Connected_DrawStyle_4); break;
+	case 5: S->addChild(m_Connected_DrawStyle_5); break;
+	case 6: S->addChild(m_Connected_DrawStyle_6); break;
+	case 7: S->addChild(m_Connected_DrawStyle_7); break;
+	default: break;
+	}
+
+	start = camera_start[cam]+1;
+	finish = camera_end[cam]-1;
+
+	SoMaterial *coordOriginColor = new SoMaterial;
+	coordOriginColor->diffuseColor.setValue(0.0, 0.0, 1.0); 
+	S->addChild(coordOriginColor);
+
+	//vertical
+	for(index = start; index <= finish; index++)
+	{
+		for(slice = 0; slice<N_SLICES-1; slice++)
+		{
+			if( (m_flag_array[slice][index]!=REJECTED) && (m_flag_array[slice+1][index]!=REJECTED) )
+			{
+				SoSeparator* L = new SoSeparator;
+				SoCoordinate3 *Lvertices = new SoCoordinate3;
+				Lvertices->point.set1Value(0, m_xyz_array[slice][index]);
+				Lvertices->point.set1Value(1, m_xyz_array[slice+1][index]);			
+				SoLineSet *lines = new SoLineSet;
+				L->addChild(Lvertices);
+				L->addChild(lines);
+				S->addChild(L);
+
+			}
+		}
+	}
+
+	//horizontal
+	for(slice = 0; slice < N_SLICES; slice++)
+	{
+		for(index = start; index<finish; index++)
+		{
+			if( (m_flag_array[slice][index]!=REJECTED) && (m_flag_array[slice][index+1]!=REJECTED) )
+			{
+				SoSeparator* L = new SoSeparator;
+				SoCoordinate3 *Lvertices = new SoCoordinate3;
+				Lvertices->point.set1Value(0, m_xyz_array[slice][index]);
+				Lvertices->point.set1Value(1, m_xyz_array[slice][index+1]);			
+				SoLineSet *lines = new SoLineSet;
+				L->addChild(Lvertices);
+				L->addChild(lines);
+				S->addChild(L);
+
+			}
+		}
+	}
+
+
+	return S;
+}
+
+
+SoSeparator* CBodyAnalyserDoc::RenderTriangMesh(int cam)
+{
+	SoSeparator* S = new SoSeparator;	
+
+	int start, finish;
+	int index, slice;
+
+	int i;
+
+	//replace this later
+	switch (cam)
+	{
+	case 0: S->addChild(m_Connected_DrawStyle_0); break;
+	case 1: S->addChild(m_Connected_DrawStyle_1); break;
+	case 2: S->addChild(m_Connected_DrawStyle_2); break;
+	case 3: S->addChild(m_Connected_DrawStyle_3); break;
+	case 4: S->addChild(m_Connected_DrawStyle_4); break;
+	case 5: S->addChild(m_Connected_DrawStyle_5); break;
+	case 6: S->addChild(m_Connected_DrawStyle_6); break;
+	case 7: S->addChild(m_Connected_DrawStyle_7); break;
+	default: break;
+	}
+
+	start = camera_start[cam]+1;
+	finish = camera_end[cam]-1;
+
+	// Adding Vertices
+	i = 0;
+	SoCoordinate3* Tvertices = new SoCoordinate3;
+
+	for(slice = 0; slice<N_SLICES; slice++)
+	{
+		for(index = start; index <= finish; index++)
+		{
+			if (m_indices[slice][index] != SO_END_FACE_INDEX)
+			{
+				Tvertices->point.set1Value(i, m_xyz_array[slice][index]);
+				i++;
+			}
+		}
+	}
+
+	S->addChild(Tvertices);
+
+	// Adding Normals
+	i = 0;
+	SoNormal* Tnormal = new SoNormal;
+
+	for(slice = 0; slice<N_SLICES; slice++)
+	{
+		for(index = start; index <= finish; index++)
+		{
+			if (m_indices[slice][index] != SO_END_FACE_INDEX)
+			{
+				Tnormal->vector.set1Value(i, m_norm_array[slice][index]);
+				i++;
+			}
+		}
+	}
+
+	S->addChild(Tnormal);
+
+	// Adding Materials
+	
+	SoMaterial* Tmaterial = new SoMaterial;
+	Tmaterial->ref();
+	i = 0;
+
+	for(slice = 0; slice<N_SLICES; slice++)
+	{
+		for(index = start; index <= finish; index++)
+		{
+			if (m_indices[slice][index] != SO_END_FACE_INDEX)
+			{
+				float c = (m_b_array[slice][index]*1.3) / 256.0;
+				Tmaterial->diffuseColor.set1Value(i, c,c,c);
+				i++;
+			}
+		}
+	}
+
+	m_Texture_Material[cam] = new SoMaterial;
+	m_Texture_Material[cam]->ref();
+	m_Texture_Material[cam] = Tmaterial; 
+	S->addChild(m_Texture_Material[cam]);
+
+
+	m_Connected_Material_Binding[cam] = new SoMaterialBinding;
+	m_Connected_Material_Binding[cam]->ref();
+	m_Connected_Material_Binding[cam]->value = SoMaterialBinding::PER_VERTEX_INDEXED;
+	S->addChild(m_Connected_Material_Binding[cam]);
+
+
+	// Adding Indices
+	i = 0;
+	SoIndexedFaceSet* TfaceSet = new SoIndexedFaceSet;
+
+	for(index = start; index < finish; index++)
+	{
+		for(slice = 0; slice<N_SLICES-1; slice++)
+		{
+			if (m_indices[slice][index] != SO_END_FACE_INDEX)
+			{
+				//downwards
+				if (
+					(m_indices[slice][index] != SO_END_FACE_INDEX) &&
+					(m_indices[slice+1][index] != SO_END_FACE_INDEX) &&
+					(m_indices[slice+1][index+1] != SO_END_FACE_INDEX)
+					)
+				{
+					TfaceSet->coordIndex.set1Value(i++,m_indices[slice][index]);
+					TfaceSet->coordIndex.set1Value(i++,m_indices[slice+1][index]);
+					TfaceSet->coordIndex.set1Value(i++,m_indices[slice+1][index+1]);
+					TfaceSet->coordIndex.set1Value(i++,SO_END_FACE_INDEX);
+				}
+				
+
+				//to the right
+				if (
+					(m_indices[slice][index] != SO_END_FACE_INDEX) &&
+					(m_indices[slice][index+1] != SO_END_FACE_INDEX) &&
+					(m_indices[slice+1][index+1] != SO_END_FACE_INDEX)
+					)
+				{
+					TfaceSet->coordIndex.set1Value(i++,m_indices[slice][index+1]);
+					TfaceSet->coordIndex.set1Value(i++,m_indices[slice][index]);
+					TfaceSet->coordIndex.set1Value(i++,m_indices[slice+1][index+1]);
+					TfaceSet->coordIndex.set1Value(i++,SO_END_FACE_INDEX);
+				}
+				
+
+			
+			}
+		}
+	}
+
+	S->addChild(TfaceSet);
+
+
+	return S;
+
+}
+
+void CBodyAnalyserDoc::RenderCurvatureMap(int cam)
+{
+	// Adding Materials
+	SoMaterial* Cmaterial = new SoMaterial;
+	Cmaterial->ref();
+	int i = 0;
+	int slice,index;
+
+	int start = camera_start[cam]+1;
+	int finish = camera_end[cam]-1;
+
+	for(slice = 0; slice<N_SLICES; slice++)
+	//for(slice = 199; slice<201; slice++)
+	{
+		for(index = start; index <= finish; index++)
+		{
+			if (m_indices[slice][index] != SO_END_FACE_INDEX)
+			{
+				float r = m_curv_map[slice][index]->r;
+				float g = m_curv_map[slice][index]->g;
+				float b = m_curv_map[slice][index]->b;
+				Cmaterial->diffuseColor.set1Value(i, r,g,b);
+				i++;
+			}
+		}
+	}
+
+	m_Curvature_Material[cam] = new SoMaterial;
+	m_Curvature_Material[cam]->ref();
+	m_Curvature_Material[cam] = Cmaterial; 
+
+}
+
+
+// --------------------- responses to toggle view events -------------------------
+
+void CBodyAnalyserDoc::SetDisplayProperties(int component)
+{
+	switch (component)
+	{
+	case POINT_CLOUD:
+			if (m_showPointCloud==TRUE)		
+			{m_PointCloud_DrawStyle->style.setValue(SoDrawStyle::POINTS);}
+			else	
+			{m_PointCloud_DrawStyle->style.setValue(SoDrawStyle::INVISIBLE);}
+		break;
+	case OUTLIER_CLOUD:
+			if (m_showOutlierCloud==TRUE)		
+			{m_OutlierCloud_DrawStyle->style.setValue(SoDrawStyle::POINTS);}
+			else	
+			{m_OutlierCloud_DrawStyle->style.setValue(SoDrawStyle::INVISIBLE);}
+		break;
+	case COORD_ORIGIN:
+			if (m_showCoordOrigin==TRUE)	
+			{m_CoordOrigin_DrawStyle->style.setValue(SoDrawStyle::LINES);}
+			else	
+			{m_CoordOrigin_DrawStyle->style.setValue(SoDrawStyle::INVISIBLE);}
+		break;
+	case REF_FRAME:
+			if (m_showRefFrame==TRUE)		
+			{m_RefFrame_DrawStyle->style.setValue(SoDrawStyle::LINES);}
+			else	
+			{m_RefFrame_DrawStyle->style.setValue(SoDrawStyle::INVISIBLE);}
+		break;
+	case CONNECTED_0:
+			if (m_showConnected_0==TRUE)		
+			{m_Connected_DrawStyle_0->style.setValue(SoDrawStyle::FILLED);}
+			else	
+			{m_Connected_DrawStyle_0->style.setValue(SoDrawStyle::INVISIBLE);}
+		break;
+	case CONNECTED_1:
+			if (m_showConnected_1==TRUE)		
+			{m_Connected_DrawStyle_1->style.setValue(SoDrawStyle::FILLED);}
+			else	
+			{m_Connected_DrawStyle_1->style.setValue(SoDrawStyle::INVISIBLE);}
+		break;
+	case CONNECTED_2:
+			if (m_showConnected_2==TRUE)		
+			{m_Connected_DrawStyle_2->style.setValue(SoDrawStyle::FILLED);}
+			else	
+			{m_Connected_DrawStyle_2->style.setValue(SoDrawStyle::INVISIBLE);}
+		break;
+	case CONNECTED_3:
+			if (m_showConnected_3==TRUE)		
+			{m_Connected_DrawStyle_3->style.setValue(SoDrawStyle::FILLED);}
+			else	
+			{m_Connected_DrawStyle_3->style.setValue(SoDrawStyle::INVISIBLE);}
+		break;
+	case CONNECTED_4:
+			if (m_showConnected_4==TRUE)		
+			{m_Connected_DrawStyle_4->style.setValue(SoDrawStyle::FILLED);}
+			else	
+			{m_Connected_DrawStyle_4->style.setValue(SoDrawStyle::INVISIBLE);}
+		break;
+	case CONNECTED_5:
+			if (m_showConnected_5==TRUE)		
+			{m_Connected_DrawStyle_5->style.setValue(SoDrawStyle::FILLED);}
+			else	
+			{m_Connected_DrawStyle_5->style.setValue(SoDrawStyle::INVISIBLE);}
+		break;
+	case CONNECTED_6:
+			if (m_showConnected_6==TRUE)		
+			{m_Connected_DrawStyle_6->style.setValue(SoDrawStyle::FILLED);}
+			else	
+			{m_Connected_DrawStyle_6->style.setValue(SoDrawStyle::INVISIBLE);}
+		break;
+	case CONNECTED_7:
+			if (m_showConnected_7==TRUE)		
+			{m_Connected_DrawStyle_7->style.setValue(SoDrawStyle::FILLED);}
+			else	
+			{m_Connected_DrawStyle_7->style.setValue(SoDrawStyle::INVISIBLE);}
+		break;
+	case CONNECTED_ALL:
+			m_Connected_DrawStyle_0->style.setValue(SoDrawStyle::FILLED);
+			m_Connected_DrawStyle_1->style.setValue(SoDrawStyle::FILLED);
+			m_Connected_DrawStyle_2->style.setValue(SoDrawStyle::FILLED);
+			m_Connected_DrawStyle_3->style.setValue(SoDrawStyle::FILLED);
+			m_Connected_DrawStyle_4->style.setValue(SoDrawStyle::FILLED);
+			m_Connected_DrawStyle_5->style.setValue(SoDrawStyle::FILLED);
+			m_Connected_DrawStyle_6->style.setValue(SoDrawStyle::FILLED);
+			m_Connected_DrawStyle_7->style.setValue(SoDrawStyle::FILLED);
+		break;
+	case CONNECTED_NONE:
+			m_Connected_DrawStyle_0->style.setValue(SoDrawStyle::INVISIBLE);
+			m_Connected_DrawStyle_1->style.setValue(SoDrawStyle::INVISIBLE);
+			m_Connected_DrawStyle_2->style.setValue(SoDrawStyle::INVISIBLE);
+			m_Connected_DrawStyle_3->style.setValue(SoDrawStyle::INVISIBLE);
+			m_Connected_DrawStyle_4->style.setValue(SoDrawStyle::INVISIBLE);
+			m_Connected_DrawStyle_5->style.setValue(SoDrawStyle::INVISIBLE);
+			m_Connected_DrawStyle_6->style.setValue(SoDrawStyle::INVISIBLE);
+			m_Connected_DrawStyle_7->style.setValue(SoDrawStyle::INVISIBLE);
+		break;
+	default:
+		break;
+	}//switch
+
+}
+
+// --------------------- responses to toggle view events -------------------------
+
+void CBodyAnalyserDoc::OnViewPointcloud() 
+{
+	m_showPointCloud = (!m_showPointCloud);
+	SetDisplayProperties(POINT_CLOUD);
+}
+
+void CBodyAnalyserDoc::OnViewOutliercloud() 
+{
+	m_showOutlierCloud = (!m_showOutlierCloud);
+	SetDisplayProperties(OUTLIER_CLOUD);
+}
+
+void CBodyAnalyserDoc::OnViewCoordinateorigin() 
+{
+	m_showCoordOrigin = (!m_showCoordOrigin);
+	SetDisplayProperties(COORD_ORIGIN);
+}
+void CBodyAnalyserDoc::OnViewReferenceframe() 
+
+{
+	m_showRefFrame = (!m_showRefFrame);
+	SetDisplayProperties(REF_FRAME);
+}
+
+void CBodyAnalyserDoc::OnViewConnectedmeshCamera0() 
+{
+	m_showConnected_0 = (!m_showConnected_0);
+	SetDisplayProperties(CONNECTED_0);
+}
+
+void CBodyAnalyserDoc::OnViewConnectedmeshCamera1() 
+{
+	m_showConnected_1 = (!m_showConnected_1);
+	SetDisplayProperties(CONNECTED_1);
+}
+
+void CBodyAnalyserDoc::OnViewConnectedmeshCamera2() 
+{
+	m_showConnected_2 = (!m_showConnected_2);
+	SetDisplayProperties(CONNECTED_2);
+}
+
+void CBodyAnalyserDoc::OnViewConnectedmeshCamera3() 
+{
+	m_showConnected_3 = (!m_showConnected_3);
+	SetDisplayProperties(CONNECTED_3);
+}
+
+void CBodyAnalyserDoc::OnViewConnectedmeshCamera4() 
+{
+	m_showConnected_4 = (!m_showConnected_4);
+	SetDisplayProperties(CONNECTED_4);
+}
+
+void CBodyAnalyserDoc::OnViewConnectedmeshCamera5() 
+{
+	m_showConnected_5 = (!m_showConnected_5);
+	SetDisplayProperties(CONNECTED_5);
+}
+
+void CBodyAnalyserDoc::OnViewConnectedmeshCamera6() 
+{
+	m_showConnected_6 = (!m_showConnected_6);
+	SetDisplayProperties(CONNECTED_6);
+}
+
+void CBodyAnalyserDoc::OnViewConnectedmeshCamera7() 
+{
+	m_showConnected_7 = (!m_showConnected_7);
+	SetDisplayProperties(CONNECTED_7);
+}
+
+void CBodyAnalyserDoc::OnViewConnectedmeshAll() 
+{
+	m_showConnected_0 = TRUE;
+	m_showConnected_1 = TRUE;
+	m_showConnected_2 = TRUE;
+	m_showConnected_3 = TRUE;
+	m_showConnected_4 = TRUE;
+	m_showConnected_5 = TRUE;
+	m_showConnected_6 = TRUE;
+	m_showConnected_7 = TRUE;
+	SetDisplayProperties(CONNECTED_ALL);
+}
+
+
+void CBodyAnalyserDoc::OnViewConnectedmeshNone() 
+{
+	m_showConnected_0 = FALSE;
+	m_showConnected_1 = FALSE;
+	m_showConnected_2 = FALSE;
+	m_showConnected_3 = FALSE;
+	m_showConnected_4 = FALSE;
+	m_showConnected_5 = FALSE;
+	m_showConnected_6 = FALSE;
+	m_showConnected_7 = FALSE;
+	SetDisplayProperties(CONNECTED_NONE);
+}
+
+void CBodyAnalyserDoc::OnUseIntensities() 
+{
+	m_materialMode = (!m_materialMode);
+
+	if(!m_materialMode)
+	{	
+		for(int j = 0; j < N_CAMERAS; j++)
+		{
+			m_Texture_Material[j]->diffuseColor.set1Value(0, 0.8,0.8,0.8);
+			m_Connected_Material_Binding[j]->value = SoMaterialBinding::OVERALL;
+		}
+	}
+	else
+	{
+		for(int j = 0; j < N_CAMERAS; j++)
+		{
+			m_Connected_Material_Binding[j]->value = SoMaterialBinding::PER_VERTEX_INDEXED;
+		}
+	}
+}
+
+// --------------------- menu updators --------------------------------------------
+
+void CBodyAnalyserDoc::OnUpdateViewPointcloud(CCmdUI* pCmdUI) 
+{
+	pCmdUI->SetCheck(m_showPointCloud);
+}
+
+void CBodyAnalyserDoc::OnUpdateViewOutliercloud(CCmdUI* pCmdUI) 
+{
+	pCmdUI->SetCheck(m_showOutlierCloud);
+}
+
+void CBodyAnalyserDoc::OnUpdateViewCoordinateorigin(CCmdUI* pCmdUI) 
+{
+	pCmdUI->SetCheck(m_showCoordOrigin);
+}
+
+void CBodyAnalyserDoc::OnUpdateViewReferenceframe(CCmdUI* pCmdUI) 
+{
+	pCmdUI->SetCheck(m_showRefFrame);
+}
+
+void CBodyAnalyserDoc::OnUpdateViewConnectedmeshCamera0(CCmdUI* pCmdUI) 
+{
+	pCmdUI->SetCheck(m_showConnected_0);
+}
+
+void CBodyAnalyserDoc::OnUpdateViewConnectedmeshCamera1(CCmdUI* pCmdUI) 
+{
+	pCmdUI->SetCheck(m_showConnected_1);
+}
+
+void CBodyAnalyserDoc::OnUpdateViewConnectedmeshCamera2(CCmdUI* pCmdUI) 
+{
+	pCmdUI->SetCheck(m_showConnected_2);
+}
+
+void CBodyAnalyserDoc::OnUpdateViewConnectedmeshCamera3(CCmdUI* pCmdUI) 
+{
+	pCmdUI->SetCheck(m_showConnected_3);
+}
+
+void CBodyAnalyserDoc::OnUpdateViewConnectedmeshCamera4(CCmdUI* pCmdUI) 
+{
+	pCmdUI->SetCheck(m_showConnected_4);
+}
+
+void CBodyAnalyserDoc::OnUpdateViewConnectedmeshCamera5(CCmdUI* pCmdUI) 
+{
+	pCmdUI->SetCheck(m_showConnected_5);
+}
+
+void CBodyAnalyserDoc::OnUpdateViewConnectedmeshCamera6(CCmdUI* pCmdUI) 
+{
+	pCmdUI->SetCheck(m_showConnected_6);
+}
+
+void CBodyAnalyserDoc::OnUpdateViewConnectedmeshCamera7(CCmdUI* pCmdUI) 
+{
+	pCmdUI->SetCheck(m_showConnected_7);
+}
+
+void CBodyAnalyserDoc::OnUpdateViewConnectedmeshNone(CCmdUI* pCmdUI) 
+{
+	// TODO: Add your command update UI handler code here
+}
+
+void CBodyAnalyserDoc::OnUpdateViewConnectedmeshAll(CCmdUI* pCmdUI) 
+{
+	// TODO: Add your command update UI handler code here
+}
+
+void CBodyAnalyserDoc::OnUpdateUseIntensities(CCmdUI* pCmdUI) 
+{
+	pCmdUI->SetCheck(m_materialMode);
+	pCmdUI->Enable(m_colormapMode==TEXTURE);
+}
+
+void CBodyAnalyserDoc::OnViewConnectedmeshCurvaturecolourmap() 
+{
+	int NDX;
+
+	// TODO: Add your command handler code here
+	if(!m_curv_map_calculated)
+	{
+		CNoCurvMapDialog cdlg;
+		cdlg.DoModal();
+	}
+	else
+	{
+		if(m_colormapMode==CURVATURE)
+		{
+			m_colormapMode = TEXTURE;
+			for(int j = 0; j < N_CAMERAS; j++)
+			//for(int j = 1; j <= 1; j++)
+			{
+				triangMesh[j]->replaceChild(m_Curvature_Material[j],m_Texture_Material[j]);
+			}
+		}
+		else
+		{
+			m_colormapMode = CURVATURE;
+			for(int j = 0; j < N_CAMERAS; j++)
+			//for(int j = 1; j <= 1; j++)
+			{
+				triangMesh[j]->replaceChild(m_Texture_Material[j],m_Curvature_Material[j]);
+			}
+
+		}
+
+	}
+}
+
+void CBodyAnalyserDoc::OnUpdateViewConnectedmeshCurvaturecolourmap(CCmdUI* pCmdUI) 
+{
+	if(m_colormapMode==CURVATURE)
+	{
+		pCmdUI->SetText("Texture Colour Map");
+	}
+	else
+	{
+		pCmdUI->SetText("Curvature Colour Map");
+	}
+}
+
+
+// ----------------------------------------------------------------------------------
+
+void CBodyAnalyserDoc::CleanBody()
+{
+	Clean_Thresholding();
+	Clean_FirstAndLast();
+	Clean_SpatialCulling();
+	Clean_ProximityTest();
+	//Clean_BottomSlice();
+}
+
+void CBodyAnalyserDoc::Clean_Thresholding()
+{
+	int slice, index; 
+
+	for(slice = 0; slice < N_SLICES; slice++)
+	{
+		for(index = 0; index < (N_CAMERAS*N_LEDS); index++)
+		{
+			if (m_b_array[slice][index]<=INTENSITY_THRESHOLD) 
+				{m_flag_array[slice][index]=REJECTED;}
+		}
+	}
+
+}
+
+void CBodyAnalyserDoc::Clean_FirstAndLast()
+{
+	int slice, index; 
+
+	for(slice = 0; slice < N_SLICES; slice++)
+	{
+		for(index = 0; index < (N_CAMERAS*N_LEDS); index++)
+		{
+			if (
+				(index==camera_start[0]) || (index==camera_end[0]) ||
+				(index==camera_start[1]) || (index==camera_end[1]) ||
+				(index==camera_start[2]) || (index==camera_end[2]) ||
+				(index==camera_start[3]) || (index==camera_end[3]) ||
+				(index==camera_start[4]) || (index==camera_end[4]) ||
+				(index==camera_start[5]) || (index==camera_end[5]) ||
+				(index==camera_start[6]) || (index==camera_end[6]) ||
+				(index==camera_start[7]) || (index==camera_end[7])
+				) 
+				{m_flag_array[slice][index]=REJECTED;}
+		}
+	}
+
+
+}
+
+void CBodyAnalyserDoc::Clean_SpatialCulling()
+{
+	int slice, index; 
+	float x,y,z;
+
+	int f = GLOBAL_SCALING_FACTOR;
+	float lowlim = -490.0*f;
+	float highlim = 490.0*f;
+
+	for(slice = 0; slice < N_SLICES; slice++)
+	{
+		for(index = 0; index < (N_CAMERAS*N_LEDS); index++)
+		{
+			if (m_flag_array[slice][index] == ACCEPTED)
+			{
+				m_xyz_array[slice][index].getValue(x,y,z);
+
+				if 
+					(
+						(x<lowlim) || (x>highlim) ||
+	
+						(z<lowlim) || (z>highlim) 
+					)
+					{m_flag_array[slice][index]=REJECTED;}
+			}
+		}
+	}
+}
+
+void CBodyAnalyserDoc::Clean_ProximityTest()
+{
+	for(int slice = 0; slice < N_SLICES; slice++)	
+	{
+		Clean_Slice(slice);
+		if(slice > (N_SLICES-3)) {Clean_BottomSlice(slice);}
+	}
+}
+
+void CBodyAnalyserDoc::Clean_Slice(int s)
+{
+	float min_dist, temp_dist;
+	float x1, y1, z1;
+	float x2, y2, z2;
+
+	for(int i = 0; i<(N_CAMERAS*N_LEDS); i++)
+	{
+		if(m_flag_array[s][i]!=REJECTED)
+		{
+			m_xyz_array[s][i].getValue(x1,y1,z1);
+			min_dist=99999.9;
+			for(int j = 0; j<(N_CAMERAS*N_LEDS); j++)
+			{
+				if( (i<j) && (m_flag_array[s][j]!=REJECTED) )
+				{
+					m_xyz_array[s][j].getValue(x2,y2,z2);
+					temp_dist = eucDist(x1,y1,z1,x2,y2,z2);
+					if(temp_dist<min_dist) {min_dist = temp_dist;}
+				}
+			}
+			if(min_dist>DISTANCE_THRESHOLD) {m_flag_array[s][i]=REJECTED;}
+		}
+	}
+}
+
+void CBodyAnalyserDoc::Clean_BottomSlice(int s)
+{
+	float min_dist, temp_dist;
+	float x1, y1, z1;
+	float x2, y2, z2;
+
+	for(int i = 0; i<(N_CAMERAS*N_LEDS); i++)
+	{
+		if(m_flag_array[s][i]!=REJECTED)
+		{
+			m_xyz_array[s][i].getValue(x1,y1,z1);
+			min_dist=99999.9;
+			for(int j = 0; j<(N_CAMERAS*N_LEDS); j++)
+			{
+				if(m_flag_array[s-1][j]!=REJECTED)
+				{
+					m_xyz_array[s-1][j].getValue(x2,y2,z2);
+					temp_dist = eucDist(x1,y1,z1,x2,y2,z2);
+					if(temp_dist<min_dist) {min_dist = temp_dist;}
+				}
+			}
+			if(min_dist>DISTANCE_THRESHOLD) {m_flag_array[s][i]=REJECTED;}
+		}
+	}
+
+}
+
+
+//------CAMERA IMAGE GENERATION-------------------------------------------------------
+
+void CBodyAnalyserDoc::CreateCameraImages()
+{
+	int slice, index, camera, gscale;; 
+
+	int null_r = 120;
+	int null_g = 150;
+	int null_b = 220;
+
+	float x,y,z;
+
+	ofstream cam_img_file;
+
+	cam_img_file.open("cam_imgs.hci");
+
+	cam_img_file	<< N_CAMERAS << "\n" 
+					<< N_LEDS << " " << N_SLICES << "\n" 
+					<< N_GSCALES << " "<< N_CHANNELS << "\n";
+
+	for(camera = 0; camera < N_CAMERAS; camera++)
+	{
+		for(slice = 0; slice < N_SLICES; slice++)
+		{
+			for(index = 0; index < N_LEDS; index++)  
+			{
+				if (m_flag_array[slice][index+(camera*N_LEDS)] == ACCEPTED)
+				{ 
+					m_xyz_array[slice][index+(camera*N_LEDS)].getValue(x,y,z);
+					gscale = m_b_array[slice][index+(camera*N_LEDS)];
+					cam_img_file << x << " " << y << " " << z << " " << gscale << "\n";
+				}
+				else
+				{ 
+					cam_img_file << 0 << " " << 0 << " " << 0 << " " << -1 << "\n"; 
+				}
+			}
+		}
+		
+		cam_img_file << "\n";
+	}
+
+	cam_img_file.close();
+}
+
+
+//---------------- NORMALS -----------------------------------------------------------
+
+void CBodyAnalyserDoc::CalculateNormals()
+{
+// also assigns an index number to every valid point that is
+// associated to at least one triangle
+
+	int slice,index;
+	int start,finish;
+	int camera;
+
+	float x,y,z;	//current point
+	float x1,y1,z1;
+	float x2,y2,z2;
+	float xn,yn,zn; //current normal
+	float xs,ys,zs; //sum of normals
+	
+	int n_adjacent_faces;
+
+	for(camera = 0; camera < N_CAMERAS; camera++)
+	{
+		start  = camera_start[camera];
+		finish = camera_end[camera];
+
+		valid_point_counter[camera] = 0;
+
+		for(slice = 0; slice < N_SLICES; slice++)
+		{
+			for(index = start; index <= finish; index++)
+			{
+				if(m_flag_array[slice][index]!=REJECTED)
+				{
+					m_xyz_array[slice][index].getValue(x,y,z);
+					
+					n_adjacent_faces = xs = ys = zs = 0;
+					
+					//    2 3
+					//   1   4
+					//
+					//   8   5
+					//    7 6
+
+					// 1
+					if ( 
+						( slice!=0 ) &&
+						( index>start) &&
+						( m_flag_array[slice-1][index-1]!=REJECTED ) &&
+						( m_flag_array[slice][index-1]!=REJECTED ) 
+						)
+					{
+						n_adjacent_faces++;
+
+						m_xyz_array[slice-1][index-1].getValue(x1,y1,z1);
+						m_xyz_array[slice][index-1].getValue(x2,y2,z2);
+
+						CrossProduct(	x-x1,	y-y1,	z-z1,
+										x1-x2,	y1-y2,	z1-z2,
+										xn,		yn,		zn);
+
+						xs += xn;
+						ys += yn;
+						zs += zn;
+					}
+
+					// 2
+					if ( 
+						( slice!=0 ) &&
+						( index>start) &&
+						( m_flag_array[slice-1][index]!=REJECTED ) &&
+						( m_flag_array[slice-1][index-1]!=REJECTED ) 
+						)
+					{
+						n_adjacent_faces++;
+
+						m_xyz_array[slice-1][index].getValue(x1,y1,z1);
+						m_xyz_array[slice-1][index-1].getValue(x2,y2,z2);
+
+						CrossProduct(	x-x1,	y-y1,	z-z1,
+										x1-x2,	y1-y2,	z1-z2,
+										xn,		yn,		zn);
+
+						xs += xn;
+						ys += yn;
+						zs += zn;
+					}
+
+					// 3
+					if ( 
+						( slice!=0 ) &&
+						( index<finish) &&
+						( m_flag_array[slice-1][index+1]!=REJECTED ) &&
+						( m_flag_array[slice-1][index]!=REJECTED ) 
+						)
+					{
+						n_adjacent_faces++;
+
+						m_xyz_array[slice-1][index+1].getValue(x1,y1,z1);
+						m_xyz_array[slice-1][index].getValue(x2,y2,z2);
+
+						CrossProduct(	x-x1,	y-y1,	z-z1,
+										x1-x2,	y1-y2,	z1-z2,
+										xn,		yn,		zn);
+
+						xs += xn;
+						ys += yn;
+						zs += zn;
+					}
+
+					// 4
+					if ( 
+						( slice!=0 ) &&
+						( index<finish) &&
+						( m_flag_array[slice][index+1]!=REJECTED ) &&
+						( m_flag_array[slice-1][index+1]!=REJECTED ) 
+						)
+					{
+						n_adjacent_faces++;
+
+						m_xyz_array[slice][index+1].getValue(x1,y1,z1);
+						m_xyz_array[slice-1][index+1].getValue(x2,y2,z2);
+
+						CrossProduct(	x-x1,	y-y1,	z-z1,
+										x1-x2,	y1-y2,	z1-z2,
+										xn,		yn,		zn);
+
+						xs += xn;
+						ys += yn;
+						zs += zn;
+					}
+
+					// 5
+					if ( 
+						( slice!=N_SLICES ) &&
+						( index<finish) &&
+						( m_flag_array[slice+1][index+1]!=REJECTED ) &&
+						( m_flag_array[slice][index+1]!=REJECTED ) 
+						)
+					{
+						n_adjacent_faces++;
+
+						m_xyz_array[slice+1][index+1].getValue(x1,y1,z1);
+						m_xyz_array[slice][index+1].getValue(x2,y2,z2);
+
+						CrossProduct(	x-x1,	y-y1,	z-z1,
+										x1-x2,	y1-y2,	z1-z2,
+										xn,		yn,		zn);
+
+						xs += xn;
+						ys += yn;
+						zs += zn;
+					}
+
+					// 6
+					if ( 
+						( slice!=N_SLICES ) &&
+						( index<finish) &&
+						( m_flag_array[slice+1][index]!=REJECTED ) &&
+						( m_flag_array[slice+1][index+1]!=REJECTED ) 
+						)
+					{
+						n_adjacent_faces++;
+
+						m_xyz_array[slice+1][index].getValue(x1,y1,z1);
+						m_xyz_array[slice+1][index+1].getValue(x2,y2,z2);
+
+						CrossProduct(	x-x1,	y-y1,	z-z1,
+										x1-x2,	y1-y2,	z1-z2,
+										xn,		yn,		zn);
+
+						xs += xn;
+						ys += yn;
+						zs += zn;
+					}
+
+					// 7
+					if ( 
+						( slice!=N_SLICES ) &&
+						( index>start) &&
+						( m_flag_array[slice+1][index-1]!=REJECTED ) &&
+						( m_flag_array[slice+1][index]!=REJECTED ) 
+						)
+					{
+						n_adjacent_faces++;
+
+						m_xyz_array[slice+1][index-1].getValue(x1,y1,z1);
+						m_xyz_array[slice+1][index].getValue(x2,y2,z2);
+
+						CrossProduct(	x-x1,	y-y1,	z-z1,
+										x1-x2,	y1-y2,	z1-z2,
+										xn,		yn,		zn);
+
+						xs += xn;
+						ys += yn;
+						zs += zn;
+					}
+
+					// 8
+					if ( 
+						( slice!=N_SLICES ) &&
+						( index>start) &&
+						( m_flag_array[slice+1][index-1]!=REJECTED ) &&
+						( m_flag_array[slice+1][index]!=REJECTED ) 
+						)
+					{
+						n_adjacent_faces++;
+
+						m_xyz_array[slice][index-1].getValue(x1,y1,z1);
+						m_xyz_array[slice+1][index-1].getValue(x2,y2,z2);
+
+						CrossProduct(	x-x1,	y-y1,	z-z1,
+										x1-x2,	y1-y2,	z1-z2,
+										xn,		yn,		zn);
+
+						xs += xn;
+						ys += yn;
+						zs += zn;
+					}
+
+					// associate index number if valid
+					if (n_adjacent_faces > 0)
+					{
+						m_indices[slice][index] = valid_point_counter[camera];
+						valid_point_counter[camera]++;
+					}
+					else
+					{
+						m_indices[slice][index] = SO_END_FACE_INDEX;
+					}
+
+					// average
+					xs /= n_adjacent_faces;
+					ys /= n_adjacent_faces;
+					zs /= n_adjacent_faces;
+
+					// normalise
+					normaliseVector(xs,ys,zs);
+
+					// assign vector value
+					m_norm_array[slice][index].setValue(xs,ys,zs);
+
+				}// end processing point
+			}//end index
+		}//end slice
+	}//end camera
+}
+
+//-------------- AUXILIARY FUNCTIONS -------------------------------------------
+
+float CBodyAnalyserDoc::eucDist(float x1, float y1, float z1, float x2, float y2, float z2)
+{
+	float dx = x1 - x2;
+	float dy = y1 - y2;
+	float dz = z1 - z2;
+	float result = sqrt( (dx*dx) + (dy*dy) + (dz*dz) );
+	return result;
+}
+
+void CBodyAnalyserDoc::normaliseVector(float& x, float& y, float& z)
+{
+	float m = vectorMagnitude(x,y,z);
+	x /= m;
+	y /= m;
+	z /= m;
+}
+
+float CBodyAnalyserDoc::vectorMagnitude(float x, float y, float z)
+{
+	float m = eucDist(x,y,z,0.0,0.0,0.0);
+	return m;
+}
+
+
+
+
+float CBodyAnalyserDoc::Gauss2D(float x, float y, float s)
+{
+	float xpr1 = ((x*x) + (y*y)) / (2*s*s);
+	float xpr2 = exp(-xpr1);
+	float xpr3 = 1.0/(2*PI*s*s);
+	return xpr3*xpr2;
+}
+
+void CBodyAnalyserDoc::Convolve(SbVec3f data_in[MAX_N_SLICES+6][MAX_N_LEDS+6], float m[7][7], SbVec3f data_out[MAX_N_SLICES+6][MAX_N_LEDS+6], unsigned char flags[MAX_N_SLICES+6][MAX_N_LEDS+6])
+{
+	int i,j;
+	float s;
+	float x1,y1,z1,x2,y2,z2;
+
+	for (int slice = 3; slice < N_SLICES+3; slice++)		
+	{
+		for (int index = 3; index < N_LEDS+3; index++)
+		{
+			if(flags[slice][index] != REJECTED)
+			{
+
+				float accX = 0.0;
+				float accY = 0.0;
+				float accZ = 0.0;
+				float x,y,z;	
+				
+				s = 0.0;
+
+				for(i = -3; i < 4; i++)
+				{
+					for(j = -3; j < 4; j++)
+					{
+						data_in[slice][index].getValue(x1,y1,z1);
+						data_in[slice+i][index+j].getValue(x2,y2,z2);
+
+						if(
+							(flags[slice+i][index+j] != REJECTED) &&
+							(eucDist(x1,y1,z1,x2,y2,z2) < DISTANCE_THRESHOLD)
+							)
+						{
+							data_in[slice+i][index+j].getValue(x,y,z);
+					
+							float pX = m[i+3][j+3] * x;
+							float pY = m[i+3][j+3] * y;
+							float pZ = m[i+3][j+3] * z;
+
+							accX += pX;
+							accY += pY;
+							accZ += pZ;
+
+							s += m[i+3][j+3];
+						}
+					}
+				}
+	
+				data_out[slice][index] = SbVec3f(accX/s,accY/s,accZ/s);
+		
+			}
+		}
+	}
+}
+
+
+// ------ PROCESSING TOOLS --------------------------------------
+
+
+void CBodyAnalyserDoc::OnToolsCameraImager() 
+{
+	HINSTANCE CIV = ShellExecute(	
+						NULL,
+						"open", 
+						camviewerpath,
+						NULL,
+						NULL,
+						SW_SHOW);
+}
+
+void CBodyAnalyserDoc::OnToolsSurfacesmoothing() 
+{
+	int s,i,j;
+	float x,y,z;
+
+	CConfirmDialog cdlg;
+	if (cdlg.DoModal() == IDOK)
+	{//SMOOTHING
+				
+		HCURSOR waitCursor = theApp.LoadStandardCursor(IDC_WAIT);
+		SetCursor(waitCursor);
+
+		// create temporary result arrays
+
+		SbVec3f* m_r_array[MAX_N_SLICES];			// Cartesian coordinates
+		for (s=0; s<N_SLICES; s++)		{m_r_array[s] = new SbVec3f[N_CAMERAS*N_LEDS];}
+
+		// build gaussian convolution mask
+		const int mask_size_factor = 1;
+		const int mask_size = (mask_size_factor*6) + 1;
+		float mask[mask_size][mask_size];
+		float sigma = mask_size / 120.0;
+		float start = -4.0 * sigma;
+		float step = -(2.0*start)/(mask_size-1);
+		for(i = 0; i < mask_size; i++)
+		{
+			for(j = 0; j < mask_size; j++)
+			{
+				mask[i][j] = Gauss2D(start+(i*step),start+(j*step),sigma);
+			}
+		}
+				
+		// render mask (temporary - remove later)
+		//SoSeparator* gm = new SoSeparator;
+		//gm = RenderGaussMask(mask);
+		//root->addChild(gm);
+
+		// convolve
+		
+		SbVec3f temp_in[MAX_N_SLICES+6][MAX_N_LEDS+6];
+		SbVec3f temp_out[MAX_N_SLICES+6][MAX_N_LEDS+6];
+		unsigned char flags_in[MAX_N_SLICES+6][MAX_N_LEDS+6];
+
+		for(i = 0; i < MAX_N_SLICES+6; i++)
+		{
+			for(j = 0; j < MAX_N_LEDS+6; j++)
+			{
+				flags_in[i][j] = REJECTED;
+				temp_in[i][j] = SbVec3f(0.0,0.0,0.0);
+			}
+		}
+		
+		int st,en;
+
+		for(int cam = 0; cam < N_CAMERAS; cam++)
+		{
+			st = cam * N_LEDS;
+			en = ((cam+1)*N_LEDS)-1;
+
+			// copy sub-image to temporary array
+			for(i = 3; i < N_SLICES+3; i++)
+			{
+				for(j = 3; j < N_LEDS+3; j++)
+				{
+					temp_in[i][j] = m_xyz_array[i-3][j-3+st];
+					flags_in[i][j] = m_b_array[i-3][j-3+st];
+				}
+			}
+
+			// call the convolution function
+			Convolve(temp_in,mask,temp_out, flags_in);
+
+			// copy resulting temporary array to result array
+			for(i = 3; i < N_SLICES+3; i++)
+			{
+				for(j = 3; j < N_LEDS+3; j++)
+				{
+					m_r_array[i-3][j-3+st] = temp_out[i][j];
+				}
+			}
+
+		}
+
+		// copy result arrays to point arrays
+		for (s=0; s<N_SLICES; s++)		
+		{
+			for (i=0; i<(N_CAMERAS*N_LEDS); i++)
+			{
+				m_xyz_array[s][i] = m_r_array[s][i];
+			}
+		}
+
+		// delete result arrays
+		for (s=0; s<N_SLICES; s++)		{delete m_r_array[s];}
+
+		// re-render
+		CalculateNormals();
+		for(j = 0; j < N_CAMERAS; j++)
+		{	
+			smooth_triangMesh[j] = new SoSeparator;
+			smooth_triangMesh[j] = RenderTriangMesh(j);
+			root->replaceChild(triangMesh[j], smooth_triangMesh[j]);
+			triangMesh[j] = smooth_triangMesh[j];
+		}
+
+		if (!m_materialMode)
+		{
+			OnUseIntensities();
+			OnUseIntensities();
+		}
+
+		HCURSOR arrowCursor = theApp.LoadStandardCursor(IDC_ARROW);
+		SetCursor(arrowCursor);
+
+	}
+	
+}
+
+void CBodyAnalyserDoc::OnToolsCurvaturemap() 
+{
+  CCurvMapConfirmDialog cdlg;
+  if((!m_curv_map_calculated)&&(cdlg.DoModal()==IDOK))
+  {
+	HCURSOR waitCursor = theApp.LoadStandardCursor(IDC_WAIT);
+	SetCursor(waitCursor);
+
+
+	long double gaussCurv;
+
+
+	int slice;				// the current slice (main loop)
+	int index;				// the current index (main loop)
+	float p_x,p_y,p_z;		// coords of the current point in the main loop
+
+
+	// PHASE I - Calculation of the curvature tensor
+	for(slice = 0; slice < N_SLICES; slice++)
+	{
+		st_s = slice - radius; if (st_s < 0) {st_s = 0;}
+		en_s = slice + radius; if (en_s >=N_SLICES) {en_s = N_SLICES-1;}
+
+		for(index = 0; index <= (N_CAMERAS*N_LEDS); index++)
+		{
+			if(m_flag_array[slice][index] != REJECTED)
+			{
+				m_curv_map[slice][index] = new CCurvatureProfile;
+				m_xyz_array[slice][index].getValue(p_x,p_y,p_z);
+				
+
+
+
+				// chromatic association
+				ms = gaussCurv;
+				mst = detBthr;
+
+				if(neigh_size==0)
+				{
+						m_curv_map[slice][index]->r = 1;
+						m_curv_map[slice][index]->g = 1;
+						m_curv_map[slice][index]->b = 0;
+				}
+				else
+				{	
+					if(ms < (-mst))
+					{
+						m_curv_map[slice][index]->r = 0;
+						m_curv_map[slice][index]->g = 1;
+						m_curv_map[slice][index]->b = 0;
+					}
+					if( (ms >= (-mst)) && (ms <= 0) )
+					{
+						m_curv_map[slice][index]->r = 0;
+						m_curv_map[slice][index]->g = (-ms)/mst;
+						m_curv_map[slice][index]->b = 0;
+					}
+					if( (ms <= mst) && (ms > 0) )
+					{
+						m_curv_map[slice][index]->r = ms/mst;
+						m_curv_map[slice][index]->g = 0;
+						m_curv_map[slice][index]->b = 0;
+					}
+					if(ms > mst)
+					{
+						m_curv_map[slice][index]->r = 1;
+						m_curv_map[slice][index]->g = 0;
+						m_curv_map[slice][index]->b = 0;
+
+					}
+					/*
+					if ( (m_mesh->getType()) == BICUBIC )
+					{
+						m_curv_map[slice][index]->r = 0;
+						m_curv_map[slice][index]->g = 0;
+						m_curv_map[slice][index]->b = 1;
+					}
+					if ( (m_mesh->getType()) == BIQUADRATIC )
+					{
+						m_curv_map[slice][index]->r = 0;
+						m_curv_map[slice][index]->g = 1;
+						m_curv_map[slice][index]->b = 0;
+					}
+					*/
+
+
+				}
+			}	//endif
+		}	//end looping by index
+	}	//end looping by slice
+
+	// PHASE II - visualisation
+	for(cam = 0; cam < N_CAMERAS; cam++)	{RenderCurvatureMap(cam);}
+
+	// PHASE III (Later) - Extraction of point features
+	
+	m_curv_map_calculated = TRUE;
+
+	HCURSOR arrowCursor = theApp.LoadStandardCursor(IDC_ARROW);
+	SetCursor(arrowCursor);
+
+	// Display the damn thing!!!
+	if(!m_materialMode) {OnUseIntensities();}
+	OnViewConnectedmeshCurvaturecolourmap();
+
+
+
+  }// end if(!m_curv_map_calculated)	
+}
+///------------------ Curvature Mapping Components ----------------------------------------
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////
+///  TEMPORARY FUNCTIONS - REMOVE WHEN DONE
+
+
+SoSeparator* CBodyAnalyserDoc::RenderGaussMask(float m[7][7])
+{
+	SoSeparator* S = new SoSeparator;			
+
+	//S->addChild(m_PointCloud_DrawStyle);
+
+	int i,j,c;
+
+	float x,y,z;
+	float f = 1000.0;
+
+	SoCoordinate3 *vertices = new SoCoordinate3;
+	
+	c = 0;
+	for(i = 0; i < 7; i++)
+	{
+		for(j = 0; j < 7; j++)
+		{
+			x = f*(float)i;
+			y = f*(float)j;
+			z = f*m[i][j];
+			vertices->point.set1Value(c++, x, y, z);
+		}
+	}
+
+
+	SoPointSet *cPoints = new SoPointSet;
+	S->addChild(vertices);
+
+	SoMaterial  *pointColor = new SoMaterial;
+	pointColor->diffuseColor.setValue(0.0, 1.0, 0.3); 
+	S->addChild(pointColor);
+
+	S->addChild(cPoints);
+
+	return S;
+
+}
+
+
+
+
+

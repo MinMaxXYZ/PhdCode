@@ -1,0 +1,49 @@
+//{{NO_DEPENDENCIES}}
+// Microsoft Developer Studio generated include file.
+// Used by BodyWarper.rc
+//
+#define IDD_ABOUTBOX                    100
+#define IDR_MAINFRAME                   128
+#define IDR_BODYWATYPE                  129
+#define IDD_INSUFFICIENTLANDMARKSDIALOG 130
+#define IDM_VIEWPOINTS                  997
+#define IDC_ABOUT_TEXT                  999
+#define ID_FILE_INFO                    32771
+#define ID_VIEW_PICEDIT                 32795
+#define ID_VIEW_SELECTIONMODE           32806
+#define ID_VIEW_VIEWINGMODE             32807
+#define ID_FILE_IMPORT                  32817
+#define ID_FILE_RELOAD                  32818
+#define ID_FILE_LOADSOURCESHAPE         32820
+#define ID_FILE_LOADSOURCELANDMARKS     32821
+#define ID_FILE_LOADTARGETSHAPE         32822
+#define ID_FILE_LOADTARGETLANDMARKS     32823
+#define ID_FILE_CALCULATETRANSFORMATION 32824
+#define ID_FILE_LOADTRANSFORMATION      32825
+#define ID_FILE_SAVETRANSFORMATION      32826
+#define ID_VIEW_SOURCESHAPE_SOLID       32827
+#define ID_VIEW_SOURCESHAPE_WIREFRAME   32828
+#define ID_VIEW_SOURCESHAPE_HIDE        32829
+#define ID_VIEW_SOURCELANDMARKS         32830
+#define ID_VIEW_TARGETSHAPE_SOLID       32831
+#define ID_VIEW_TARGETSHAPE_WIREFRAME   32832
+#define ID_VIEW_TARGETSHAPE_HIDE        32833
+#define ID_VIEW_TARGETSHAPE_POINTS      32834
+#define ID_VIEW_SOURCESHAPE_POINTS      32835
+#define ID_VIEW_TARGETLANDMARKS         32836
+#define ID_VIEW_WARPEDSHAPE_SOLID       32837
+#define ID_VIEW_WARPEDSHAPE_WIREFRAME   32838
+#define ID_VIEW_WARPEDSHAPE_POINTS      32839
+#define ID_VIEW_WARPEDSHAPE_HIDE        32840
+
+// Next default values for new objects
+// 
+#ifdef APSTUDIO_INVOKED
+#ifndef APSTUDIO_READONLY_SYMBOLS
+#define _APS_3D_CONTROLS                     1
+#define _APS_NEXT_RESOURCE_VALUE        132
+#define _APS_NEXT_COMMAND_VALUE         32845
+#define _APS_NEXT_CONTROL_VALUE         1001
+#define _APS_NEXT_SYMED_VALUE           101
+#endif
+#endif
